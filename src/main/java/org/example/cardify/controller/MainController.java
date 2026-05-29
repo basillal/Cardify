@@ -10,6 +10,7 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.scene.web.WebView;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import org.example.cardify.model.SpreadsheetRow;
@@ -44,6 +45,9 @@ public class MainController {
     private final Label rowCountLabel = new Label("0 rows");
     private final ChoiceBox<String> printerChoice = new ChoiceBox<>();
     private final TextField searchField = new TextField();
+
+    private Stage previewStage;
+    private WebView previewWebView;
 
     private File htmlTemplateFile;
     private List<String> currentHeaders = List.of();
@@ -142,10 +146,13 @@ public class MainController {
         Button generateButton = new Button("Download Excel Template");
         generateButton.setOnAction(event -> downloadExcelTemplate());
 
+        Button templatePreviewButton = new Button("Template Preview");
+        templatePreviewButton.setOnAction(event -> showTemplatePreview());
+
         templateStatus.getStyleClass().add("status-label");
         VBox statusBlock = new VBox(6, new Label("Template status"), templateStatus);
 
-        HBox controls = new HBox(12, uploadButton, generateButton, statusBlock);
+        HBox controls = new HBox(12, uploadButton, generateButton, templatePreviewButton, statusBlock);
         controls.setAlignment(Pos.CENTER_LEFT);
         controls.setPadding(new Insets(4, 0, 0, 0));
         return controls;
@@ -166,6 +173,9 @@ public class MainController {
         Button uploadExcelButton = new Button("Upload Filled Excel");
         uploadExcelButton.setOnAction(event -> uploadExcel());
 
+        Button rowPreviewButton = new Button("Row Preview");
+        rowPreviewButton.setOnAction(event -> showRowPreview());
+
         Button printButton = new Button("Print Selected Rows");
         printButton.setOnAction(event -> printSelectedRows());
 
@@ -179,7 +189,7 @@ public class MainController {
         searchField.setPrefWidth(320);
 
         VBox statusBlock = new VBox(6, new Label("Import status"), excelStatus, rowCountLabel);
-        HBox controls = new HBox(12, uploadExcelButton, printButton, selectAllButton, clearSelectionButton, searchField, statusBlock);
+        HBox controls = new HBox(12, uploadExcelButton, rowPreviewButton, printButton, selectAllButton, clearSelectionButton, searchField, statusBlock);
         controls.setAlignment(Pos.CENTER_LEFT);
         controls.setPadding(new Insets(4, 0, 0, 0));
         HBox.setHgrow(searchField, Priority.ALWAYS);
@@ -262,6 +272,60 @@ public class MainController {
         List<String> placeholders = htmlTemplateService.extractPlaceholders(htmlTemplateFile.toPath()).stream().toList();
         excelTemplateService.writeTemplate(saveFile.toPath(), placeholders);
         UiDialog.info(stage, "Excel template created", "Saved to:\n" + saveFile.getAbsolutePath());
+    }
+
+    private void showTemplatePreview() {
+        if (htmlTemplateFile == null) {
+            UiDialog.warn(stage, "No template loaded", "Upload an HTML template before opening the preview.");
+            return;
+        }
+
+        String htmlTemplate = htmlTemplateService.readTemplate(htmlTemplateFile.toPath());
+        Set<String> placeholders = htmlTemplateService.findPlaceholders(htmlTemplate);
+        java.util.LinkedHashMap<String, String> sampleValues = new java.util.LinkedHashMap<>();
+        for (String placeholder : placeholders) {
+            sampleValues.put(placeholder, "Sample " + placeholder);
+        }
+
+        openPreviewWindow("Template Preview", htmlTemplateService.renderTemplate(htmlTemplate, sampleValues));
+    }
+
+    private void showRowPreview() {
+        if (htmlTemplateFile == null) {
+            UiDialog.warn(stage, "No template loaded", "Upload an HTML template before opening the preview.");
+            return;
+        }
+
+        if (tableView.getSelectionModel().getSelectedItems().isEmpty()) {
+            UiDialog.warn(stage, "No row selected", "Select a row in the table before opening the row preview.");
+            return;
+        }
+
+        SpreadsheetRow previewRow = tableView.getSelectionModel().getSelectedItems().get(0);
+        String htmlTemplate = htmlTemplateService.readTemplate(htmlTemplateFile.toPath());
+        openPreviewWindow("Row Preview", htmlTemplateService.renderTemplate(htmlTemplate, previewRow.asMap()));
+    }
+
+    private void openPreviewWindow(String title, String renderedHtml) {
+
+        if (previewWebView == null) {
+            previewWebView = new WebView();
+        }
+        previewWebView.getEngine().loadContent(renderedHtml, "text/html");
+
+        if (previewStage == null) {
+            BorderPane previewRoot = new BorderPane(previewWebView);
+            previewRoot.setPadding(new Insets(12));
+            previewRoot.getStyleClass().add("preview-root");
+
+            previewStage = new Stage();
+            previewStage.initOwner(stage);
+            previewStage.setScene(new Scene(previewRoot, 980, 760));
+        }
+
+        previewStage.setTitle(title);
+        previewStage.show();
+        previewStage.toFront();
     }
 
     private void uploadExcel() {
