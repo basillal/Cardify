@@ -258,6 +258,18 @@
     -fx-background-color: linear-gradient(to bottom, #67e8f9, #3b82f6);
 }
 
+.accent-button {
+    -fx-background-color: linear-gradient(to bottom, #10b981, #047857);
+    -fx-text-fill: white;
+    -fx-font-weight: 700;
+    -fx-background-radius: 12;
+    -fx-padding: 10 16 10 16;
+}
+
+.accent-button:hover {
+    -fx-background-color: linear-gradient(to bottom, #34d399, #059669);
+}
+
 .negative-button {
     -fx-background-color: linear-gradient(to bottom, #ef4444, #b91c1c);
     -fx-text-fill: white;

@@ -13,9 +13,14 @@ import java.util.Set;
 public class SpreadsheetRow {
     private final LinkedHashMap<String, String> values;
     private final BooleanProperty selected = new SimpleBooleanProperty(false);
+    private final StringProperty status = new SimpleStringProperty("Pending");
 
     public SpreadsheetRow(Map<String, String> values) {
         this.values = new LinkedHashMap<>(values);
+        if (this.values.containsKey("Status")) {
+            status.set(this.values.get("Status"));
+            this.values.remove("Status");
+        }
     }
 
     public String getValue(String header) {
@@ -27,11 +32,25 @@ public class SpreadsheetRow {
     }
 
     public StringProperty valueProperty(String header) {
-        return new SimpleStringProperty(getValue(header));
+        StringProperty property = new SimpleStringProperty(getValue(header));
+        property.addListener((observable, oldValue, newValue) -> values.put(header, newValue));
+        return property;
     }
 
     public ReadOnlyStringWrapper readOnlyValue(String header) {
         return new ReadOnlyStringWrapper(getValue(header));
+    }
+
+    public StringProperty statusProperty() {
+        return status;
+    }
+
+    public String getStatus() {
+        return status.get();
+    }
+
+    public void setStatus(String status) {
+        this.status.set(status);
     }
 
     public BooleanProperty selectedProperty() {

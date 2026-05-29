@@ -11,11 +11,15 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.CheckBoxTableCell;
+import javafx.scene.control.cell.ChoiceBoxTableCell;
+import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.*;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.web.WebView;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import org.example.cardify.model.SpreadsheetRow;
+import org.example.cardify.service.ExcelExportService;
 import org.example.cardify.service.ExcelImportService;
 import org.example.cardify.service.AppPreferencesService;
 import org.example.cardify.service.ExcelTemplateService;
@@ -48,13 +52,20 @@ public class MainController {
     private final Label excelStatus = new Label("No Excel file loaded");
     private final Label rowCountLabel = new Label("0 rows");
     private final Label selectedCountLabel = new Label("Selected: 0");
+    private final CheckBox selectAllCheckBox = new CheckBox();
     private final ChoiceBox<String> printerChoice = new ChoiceBox<>();
     private final TextField searchField = new TextField();
     private final ToggleButton themeToggle = new ToggleButton("Light");
     private final Button removeTemplateButton = new Button("Remove Template");
     private final Button clearDataButton = new Button("Clear Imported Data");
     private final Button rowPreviewButton = new Button("Row Preview");
+    private final Button exportExcelButton = new Button("Download Excel");
+    private final Button editButton = new Button("Edit Rows");
 
+    private boolean syncingSelection = false;
+    private boolean editingEnabled = false;
+    private boolean headerCheckboxIndeterminateClick = false;
+    private final ExcelExportService excelExportService = new ExcelExportService();
     private final AppPreferencesService preferences = new AppPreferencesService();
 
     private Stage previewStage;
@@ -223,13 +234,11 @@ public class MainController {
         rowPreviewButton.setDisable(true);
 
         Button printButton = new Button("Print Selected Rows");
+        printButton.getStyleClass().add("accent-button");
         printButton.setOnAction(event -> printSelectedRows());
 
-        Button selectAllButton = new Button("Select All");
-        selectAllButton.setOnAction(event -> tableView.getSelectionModel().selectAll());
-
-        Button clearSelectionButton = new Button("Clear Selection");
-        clearSelectionButton.setOnAction(event -> tableView.getSelectionModel().clearSelection());
+        exportExcelButton.setOnAction(event -> exportCurrentRows());
+        editButton.setOnAction(event -> toggleEditMode());
 
         clearDataButton.setOnAction(event -> clearImportedData());
         clearDataButton.getStyleClass().add("negative-button");
@@ -238,26 +247,32 @@ public class MainController {
         searchField.setPromptText("Filter rows by any column value");
         searchField.setPrefWidth(320);
 
-        HBox controls = new HBox(12, searchField, uploadExcelButton, rowPreviewButton, printButton, selectAllButton, clearSelectionButton, clearDataButton);
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox controls = new HBox(12, searchField, uploadExcelButton, rowPreviewButton, exportExcelButton, editButton, spacer, printButton, clearDataButton);
         controls.setAlignment(Pos.CENTER_LEFT);
         controls.setPadding(new Insets(4, 0, 0, 0));
-        HBox.setHgrow(searchField, Priority.ALWAYS);
         controls.getStyleClass().add("control-row");
         return controls;
     }
 
     private Node buildTablePanel() {
         tableView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-        tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        tableView.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
+        tableView.setMinWidth(0);
         tableView.setPlaceholder(new Label("Import an Excel file to see rows here"));
         tableView.getStyleClass().add("data-table");
         tableView.setEditable(true);
-        VBox.setVgrow(tableView, Priority.ALWAYS);
 
         tableView.getSelectionModel().getSelectedItems().addListener((ListChangeListener<SpreadsheetRow>) c -> {
+            if (syncingSelection) {
+                return;
+            }
+            syncingSelection = true;
             while (c.next()) {
                 for (SpreadsheetRow removed : c.getRemoved()) {
-                    if (removed.isSelected()) {
+                    // Only unselect if the row is still visible; filtered-out rows should keep their selected state.
+                    if (removed.isSelected() && filteredRows.contains(removed)) {
                         removed.selectedProperty().set(false);
                     }
                 }
@@ -267,10 +282,11 @@ public class MainController {
                     }
                 }
             }
-            int selectedCount = tableView.getSelectionModel().getSelectedItems().size();
-            selectedCountLabel.setText("Selected: " + selectedCount);
-            rowPreviewButton.setDisable(selectedCount != 1);
+            updateSelectedCount();
+            syncingSelection = false;
         });
+
+        VBox.setVgrow(tableView, Priority.ALWAYS);
 
         HBox statusBar = new HBox(18, excelStatus, rowCountLabel, selectedCountLabel);
         statusBar.setAlignment(Pos.CENTER_LEFT);
@@ -298,7 +314,9 @@ public class MainController {
                 }
                 return false;
             });
+            syncFilteredSelection();
             rowCountLabel.setText(filteredRows.size() + " rows");
+            updateSelectedCount();
         });
     }
 
@@ -361,12 +379,49 @@ public class MainController {
 
     private void bindRowSelection(SpreadsheetRow row) {
         row.selectedProperty().addListener((observable, oldValue, newValue) -> {
+            if (syncingSelection) {
+                return;
+            }
+            syncingSelection = true;
             if (newValue && !tableView.getSelectionModel().getSelectedItems().contains(row)) {
                 tableView.getSelectionModel().select(row);
             } else if (!newValue && tableView.getSelectionModel().getSelectedItems().contains(row)) {
-                tableView.getSelectionModel().clearSelection(tableView.getItems().indexOf(row));
+                int index = tableView.getItems().indexOf(row);
+                if (index >= 0) {
+                    tableView.getSelectionModel().clearSelection(index);
+                }
             }
+            updateSelectedCount();
+            syncingSelection = false;
         });
+    }
+
+    private void updateSelectedCount() {
+        int selectedCount = (int) allRows.stream().filter(SpreadsheetRow::isSelected).count();
+        selectedCountLabel.setText("Selected: " + selectedCount);
+        rowPreviewButton.setDisable(selectedCount != 1);
+        boolean allSelected = !filteredRows.isEmpty() && filteredRows.stream().allMatch(SpreadsheetRow::isSelected);
+        boolean noneSelected = filteredRows.stream().noneMatch(SpreadsheetRow::isSelected);
+        selectAllCheckBox.setIndeterminate(!allSelected && !noneSelected);
+        selectAllCheckBox.setSelected(allSelected);
+    }
+
+    private void toggleEditMode() {
+        editingEnabled = !editingEnabled;
+        editButton.setText(editingEnabled ? "Stop Editing" : "Edit Rows");
+        for (int i = 1; i < tableView.getColumns().size(); i++) {
+            tableView.getColumns().get(i).setEditable(editingEnabled);
+        }
+    }
+
+    private void syncFilteredSelection() {
+        syncingSelection = true;
+        for (SpreadsheetRow row : filteredRows) {
+            if (row.isSelected() && !tableView.getSelectionModel().getSelectedItems().contains(row)) {
+                tableView.getSelectionModel().select(row);
+            }
+        }
+        syncingSelection = false;
     }
 
     private void uploadTemplate() {
@@ -475,17 +530,53 @@ public class MainController {
     }
 
     private void clearImportedData() {
+        if (!UiDialog.confirm(stage,
+                "Clear Imported Data",
+                "Are you sure you want to remove all imported rows? This action cannot be undone.")) {
+            return;
+        }
+
+        if (editingEnabled) {
+            toggleEditMode();
+        }
+
         excelFile = null;
         allRows.clear();
         currentHeaders = List.of();
         tableView.getColumns().clear();
         tableView.setItems(filteredRows);
         filteredRows.setPredicate(row -> true);
+        selectAllCheckBox.setSelected(false);
+        selectAllCheckBox.setIndeterminate(false);
         rowCountLabel.setText("0 rows");
         selectedCountLabel.setText("Selected: 0");
         excelStatus.setText("No Excel file loaded");
         preferences.clearSavedExcelPath();
         clearDataButton.setDisable(true);
+        rowPreviewButton.setDisable(true);
+    }
+
+    private void exportCurrentRows() {
+        if (filteredRows.isEmpty()) {
+            UiDialog.warn(stage, "Nothing to export", "Load data before exporting to Excel.");
+            return;
+        }
+
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Save Excel Export");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel Workbook", "*.xlsx"));
+        chooser.setInitialFileName("cardify-export.xlsx");
+        File saveFile = chooser.showSaveDialog(stage);
+        if (saveFile == null) {
+            return;
+        }
+
+        List<String> headers = new ArrayList<>(currentHeaders);
+        if (!headers.contains("Status")) {
+            headers.add(0, "Status");
+        }
+        excelExportService.writeRows(saveFile.toPath(), headers, new ArrayList<>(filteredRows));
+        UiDialog.info(stage, "Export saved", "Saved to:\n" + saveFile.getAbsolutePath());
     }
 
     private void rebuildColumns() {
@@ -498,11 +589,37 @@ public class MainController {
         selectColumn.setPrefWidth(50);
         selectColumn.setText("");
         selectColumn.setStyle("-fx-alignment: CENTER;");
+        selectColumn.setSortable(false);
+        selectColumn.setReorderable(false);
+        selectAllCheckBox.setAllowIndeterminate(true);
+        selectAllCheckBox.addEventFilter(MouseEvent.MOUSE_PRESSED, evt -> {
+            headerCheckboxIndeterminateClick = selectAllCheckBox.isIndeterminate();
+        });
+        selectAllCheckBox.setOnAction(evt -> {
+            if (headerCheckboxIndeterminateClick) {
+                filteredRows.forEach(row -> row.selectedProperty().set(false));
+            } else {
+                boolean selectAll = selectAllCheckBox.isSelected();
+                filteredRows.forEach(row -> row.selectedProperty().set(selectAll));
+            }
+            updateSelectedCount();
+            headerCheckboxIndeterminateClick = false;
+        });
+        selectColumn.setGraphic(selectAllCheckBox);
         tableView.getColumns().add(selectColumn);
+
+        TableColumn<SpreadsheetRow, String> statusColumn = new TableColumn<>("Status");
+        statusColumn.setCellValueFactory(cellData -> cellData.getValue().statusProperty());
+        statusColumn.setCellFactory(ChoiceBoxTableCell.forTableColumn("Pending", "Printed", "Error"));
+        statusColumn.setPrefWidth(120);
+        statusColumn.setEditable(editingEnabled);
+        tableView.getColumns().add(statusColumn);
 
         for (String header : currentHeaders) {
             TableColumn<SpreadsheetRow, String> column = new TableColumn<>(header);
             column.setCellValueFactory(cellData -> cellData.getValue().valueProperty(header));
+            column.setCellFactory(TextFieldTableCell.forTableColumn());
+            column.setEditable(editingEnabled);
             column.setMinWidth(140);
             tableView.getColumns().add(column);
         }
@@ -527,6 +644,7 @@ public class MainController {
         List<SpreadsheetRow> selectedRows = new ArrayList<>(tableView.getSelectionModel().getSelectedItems());
         String htmlTemplate = htmlTemplateService.readTemplate(htmlTemplateFile.toPath());
         printerService.printRows(printerName, htmlTemplate, selectedRows);
+        selectedRows.forEach(row -> row.setStatus("Printed"));
         UiDialog.info(stage, "Print job started", "Sent " + selectedRows.size() + " row(s) to " + printerName + ".");
     }
 
