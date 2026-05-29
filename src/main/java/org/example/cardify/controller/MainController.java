@@ -57,6 +57,7 @@ public class MainController {
     private final CheckBox selectAllCheckBox = new CheckBox();
     private final ChoiceBox<String> printerChoice = new ChoiceBox<>();
     private final TextField searchField = new TextField();
+    private final ChoiceBox<String> statusFilter = new ChoiceBox<>();
     private final ToggleButton themeToggle = new ToggleButton("Light");
     private final Button removeTemplateButton = new Button("Remove Template");
     private final Button clearDataButton = new Button("Clear Imported Data");
@@ -242,6 +243,10 @@ public class MainController {
         exportExcelButton.setOnAction(event -> exportCurrentRows());
         editButton.setOnAction(event -> toggleEditMode());
 
+        statusFilter.getItems().setAll("All", "Pending", "Printing", "Printed", "Error");
+        statusFilter.setValue("All");
+        statusFilter.setPrefWidth(140);
+
         clearDataButton.setOnAction(event -> clearImportedData());
         clearDataButton.getStyleClass().add("negative-button");
         clearDataButton.setDisable(true);
@@ -251,7 +256,7 @@ public class MainController {
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox controls = new HBox(12, searchField, uploadExcelButton, rowPreviewButton, exportExcelButton, editButton, clearDataButton, spacer, printButton);
+        HBox controls = new HBox(12, statusFilter, searchField, uploadExcelButton, rowPreviewButton, exportExcelButton, editButton, clearDataButton, spacer, printButton);
         controls.setAlignment(Pos.CENTER_LEFT);
         controls.setPadding(new Insets(4, 0, 0, 0));
         controls.getStyleClass().add("control-row");
@@ -303,24 +308,31 @@ public class MainController {
     }
 
     private void installSearch() {
-        searchField.textProperty().addListener((observable, oldValue, newValue) -> {
-            String query = newValue == null ? "" : newValue.trim().toLowerCase();
-            filteredRows.setPredicate(row -> {
-                if (query.isBlank()) {
+        searchField.textProperty().addListener((observable, oldValue, newValue) -> updateFilters());
+        statusFilter.getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> updateFilters());
+    }
+
+    private void updateFilters() {
+        String query = searchField.getText() == null ? "" : searchField.getText().trim().toLowerCase();
+        String statusValue = statusFilter.getValue();
+        filteredRows.setPredicate(row -> {
+            if (statusValue != null && !statusValue.equals("All") && !statusValue.equalsIgnoreCase(row.getStatus())) {
+                return false;
+            }
+            if (query.isBlank()) {
+                return true;
+            }
+            for (String header : currentHeaders) {
+                String value = row.getValue(header);
+                if (value != null && value.toLowerCase().contains(query)) {
                     return true;
                 }
-                for (String header : currentHeaders) {
-                    String value = row.getValue(header);
-                    if (value != null && value.toLowerCase().contains(query)) {
-                        return true;
-                    }
-                }
-                return false;
-            });
-            syncFilteredSelection();
-            rowCountLabel.setText(filteredRows.size() + " rows");
-            updateSelectedCount();
+            }
+            return false;
         });
+        syncFilteredSelection();
+        rowCountLabel.setText(filteredRows.size() + " rows");
+        updateSelectedCount();
     }
 
     public void refreshPrinters() {
@@ -626,9 +638,10 @@ public class MainController {
 
         TableColumn<SpreadsheetRow, String> statusColumn = new TableColumn<>("Status");
         statusColumn.setCellValueFactory(cellData -> cellData.getValue().statusProperty());
-        statusColumn.setCellFactory(ChoiceBoxTableCell.forTableColumn("Pending", "Printed", "Error"));
+        statusColumn.setCellFactory(ChoiceBoxTableCell.forTableColumn("Pending", "Printing", "Printed", "Error"));
         statusColumn.setPrefWidth(120);
-        statusColumn.setEditable(editingEnabled);
+        // Allow changing Status without toggling Edit Mode
+        statusColumn.setEditable(true);
         tableView.getColumns().add(statusColumn);
 
         for (String header : currentHeaders) {
