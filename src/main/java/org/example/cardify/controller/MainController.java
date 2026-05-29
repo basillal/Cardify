@@ -64,9 +64,13 @@ public class MainController {
     private final Button rowPreviewButton = new Button("Row Preview");
     private final Button exportExcelButton = new Button("Download Excel");
     private final Button editButton = new Button("Edit Rows");
+    private final ComboBox<Path> templateChoice = new ComboBox<>();
+    private final ObservableList<Path> templateHistory = FXCollections.observableArrayList();
+    private final Label selectedTemplateLabel = new Label("No template selected");
     private final ObservableList<String> templatePlaceholders = FXCollections.observableArrayList();
 
     private boolean syncingSelection = false;
+    private boolean syncingTemplateSelection = false;
     private boolean editingEnabled = false;
     private boolean headerCheckboxIndeterminateClick = false;
     private final ExcelExportService excelExportService = new ExcelExportService();
@@ -91,6 +95,7 @@ public class MainController {
         buildLayout();
         applyTheme(true);
         refreshPrinters();
+        configureTemplateChoice();
         installSearch();
         restoreSavedState();
     }
@@ -199,6 +204,12 @@ public class MainController {
         Button uploadButton = new Button("Upload HTML Template");
         uploadButton.setOnAction(event -> uploadTemplate());
 
+        Button updateButton = new Button("Update Selected Template");
+        updateButton.setOnAction(event -> updateSelectedTemplate());
+
+        Button deleteButton = new Button("Delete Selected Template");
+        deleteButton.setOnAction(event -> deleteSelectedTemplate());
+
         Button generateButton = new Button("Download Excel Template");
         generateButton.setOnAction(event -> downloadExcelTemplate());
 
@@ -210,9 +221,11 @@ public class MainController {
         removeTemplateButton.setDisable(true);
 
         templateStatus.getStyleClass().add("status-label");
-        VBox statusBlock = new VBox(6, new Label("Template status"), templateStatus);
+        selectedTemplateLabel.getStyleClass().add("status-label");
+        templateChoice.setPrefWidth(360);
+        VBox statusBlock = new VBox(6, new Label("Selected template"), templateChoice, selectedTemplateLabel, templateStatus);
 
-        HBox controls = new HBox(12, uploadButton, generateButton, templatePreviewButton, removeTemplateButton, statusBlock);
+        HBox controls = new HBox(12, uploadButton, updateButton, deleteButton, generateButton, templatePreviewButton, removeTemplateButton, statusBlock);
         controls.setAlignment(Pos.CENTER_LEFT);
         controls.setPadding(new Insets(4, 0, 0, 0));
         controls.getStyleClass().add("control-row");
@@ -347,10 +360,7 @@ public class MainController {
     }
 
     private void restoreSavedState() {
-        String savedTemplate = preferences.getSavedTemplatePath();
-        if (savedTemplate != null && !savedTemplate.isBlank()) {
-            loadTemplateFromPath(Path.of(savedTemplate));
-        }
+        loadSavedTemplateHistory();
         String savedExcel = preferences.getSavedExcelPath();
         if (savedExcel != null && !savedExcel.isBlank()) {
             loadExcelFromPath(Path.of(savedExcel));
@@ -358,19 +368,26 @@ public class MainController {
     }
 
     private void loadTemplateFromPath(Path path) {
+        loadTemplateFromPath(path, true);
+    }
+
+    private void loadTemplateFromPath(Path path, boolean recordInHistory) {
         if (Files.exists(path) && Files.isRegularFile(path)) {
-            htmlTemplateFile = path.toFile();
-            Set<String> placeholders = htmlTemplateService.extractPlaceholders(path);
+            Path normalizedPath = path.toAbsolutePath().normalize();
+            if (recordInHistory) {
+                rememberTemplate(normalizedPath);
+            }
+            clearCurrentTemplateState();
+            htmlTemplateFile = normalizedPath.toFile();
+            Set<String> placeholders = htmlTemplateService.extractPlaceholders(normalizedPath);
             templatePlaceholders.setAll(placeholders);
             placeholdersArea.setText(String.join(System.lineSeparator(), placeholders));
-            templateStatus.setText(path.getFileName() + " loaded with " + placeholders.size() + " placeholder(s)");
-            preferences.saveTemplatePath(path.toAbsolutePath().toString());
+            selectedTemplateLabel.setText(normalizedPath.getFileName().toString());
+            templateStatus.setText("Loaded with " + placeholders.size() + " placeholder(s)");
+            syncTemplateChoice(normalizedPath);
             removeTemplateButton.setDisable(false);
         } else {
-            htmlTemplateFile = null;
-            templatePlaceholders.clear();
-            
-            preferences.clearSavedTemplatePath();
+            clearCurrentTemplateState();
         }
     }
 
@@ -459,14 +476,157 @@ public class MainController {
         loadTemplateFromPath(selected.toPath());
     }
 
+    private void updateSelectedTemplate() {
+        Path currentTemplate = templateChoice.getValue();
+        if (currentTemplate == null) {
+            UiDialog.warn(stage, "No template selected", "Choose a template from the dropdown before updating it.");
+            return;
+        }
+
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Select Replacement HTML Template");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("HTML Files", "*.html", "*.htm"));
+        File replacement = chooser.showOpenDialog(stage);
+        if (replacement == null) {
+            return;
+        }
+
+        replaceTemplateInHistory(currentTemplate, replacement.toPath());
+        loadTemplateFromPath(replacement.toPath(), false);
+    }
+
+    private void deleteSelectedTemplate() {
+        Path selectedTemplate = templateChoice.getValue();
+        if (selectedTemplate == null) {
+            UiDialog.warn(stage, "No template selected", "Choose a template from the dropdown before deleting it.");
+            return;
+        }
+
+        if (!UiDialog.confirm(stage, "Delete Template", "Remove the selected template from the template list?")) {
+            return;
+        }
+
+        Path normalizedSelectedTemplate = selectedTemplate.toAbsolutePath().normalize();
+        templateHistory.removeIf(templatePath -> templatePath.toAbsolutePath().normalize().equals(normalizedSelectedTemplate));
+        preferences.saveTemplatePaths(templateHistory.stream().map(Path::toString).toList());
+
+        if (templateHistory.isEmpty()) {
+            clearCurrentTemplateState();
+            templateChoice.setValue(null);
+            return;
+        }
+
+        Path latestTemplate = templateHistory.get(0);
+        loadTemplateFromPath(latestTemplate, false);
+    }
+
     private void clearTemplate() {
+        clearCurrentTemplateState();
+    }
+
+    private void clearCurrentTemplateState() {
         htmlTemplateFile = null;
         placeholdersArea.clear();
         templatePlaceholders.clear();
-        
+        selectedTemplateLabel.setText("No template selected");
         templateStatus.setText("No HTML template loaded");
-        preferences.clearSavedTemplatePath();
+        syncingTemplateSelection = true;
+        templateChoice.setValue(null);
+        syncingTemplateSelection = false;
         removeTemplateButton.setDisable(true);
+    }
+
+    private void loadSavedTemplateHistory() {
+        List<Path> savedTemplates = preferences.getSavedTemplatePaths().stream()
+                .map(Path::of)
+                .map(Path::toAbsolutePath)
+                .map(Path::normalize)
+                .filter(Files::exists)
+                .filter(Files::isRegularFile)
+                .toList();
+
+        templateHistory.setAll(savedTemplates);
+        if (templateHistory.isEmpty()) {
+            clearCurrentTemplateState();
+            templateChoice.setValue(null);
+            preferences.clearSavedTemplatePaths();
+            return;
+        }
+
+        Path latestTemplate = templateHistory.get(0);
+        loadTemplateFromPath(latestTemplate, false);
+        syncTemplateChoice(latestTemplate);
+        preferences.saveTemplatePaths(templateHistory.stream().map(Path::toString).toList());
+    }
+
+    private void rememberTemplate(Path templatePath) {
+        Path normalizedTemplatePath = templatePath.toAbsolutePath().normalize();
+        templateHistory.removeIf(existingPath -> existingPath.toAbsolutePath().normalize().equals(normalizedTemplatePath));
+        templateHistory.add(0, normalizedTemplatePath);
+        preferences.saveTemplatePaths(templateHistory.stream().map(Path::toString).toList());
+    }
+
+    private void replaceTemplateInHistory(Path oldTemplate, Path newTemplate) {
+        Path normalizedOldTemplate = oldTemplate.toAbsolutePath().normalize();
+        Path normalizedNewTemplate = newTemplate.toAbsolutePath().normalize();
+        int templateIndex = -1;
+        for (int index = 0; index < templateHistory.size(); index++) {
+            if (templateHistory.get(index).toAbsolutePath().normalize().equals(normalizedOldTemplate)) {
+                templateIndex = index;
+                break;
+            }
+        }
+
+        if (templateIndex >= 0) {
+            templateHistory.set(templateIndex, normalizedNewTemplate);
+        } else {
+            templateHistory.add(0, normalizedNewTemplate);
+        }
+        preferences.saveTemplatePaths(templateHistory.stream().map(Path::toString).toList());
+    }
+
+    private void configureTemplateChoice() {
+        templateChoice.setItems(templateHistory);
+        templateChoice.setCellFactory(listView -> new ListCell<>() {
+            @Override
+            protected void updateItem(Path item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : formatTemplateDisplay(item));
+            }
+        });
+        templateChoice.setButtonCell(new ListCell<>() {
+            @Override
+            protected void updateItem(Path item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : formatTemplateDisplay(item));
+            }
+        });
+        templateChoice.valueProperty().addListener((observable, oldValue, newValue) -> {
+            if (syncingTemplateSelection || newValue == null) {
+                return;
+            }
+            loadTemplateFromPath(newValue, false);
+        });
+    }
+
+    private void syncTemplateChoice(Path path) {
+        syncingTemplateSelection = true;
+        templateChoice.setValue(path);
+        syncingTemplateSelection = false;
+    }
+
+    private String formatTemplateDisplay(Path path) {
+        Path normalizedPath = path.toAbsolutePath().normalize();
+        Path fileName = normalizedPath.getFileName();
+        if (fileName == null) {
+            return normalizedPath.toString();
+        }
+
+        Path parent = normalizedPath.getParent();
+        if (parent == null) {
+            return fileName.toString();
+        }
+        return fileName + " (" + parent + ")";
     }
 
     private void downloadExcelTemplate() {
