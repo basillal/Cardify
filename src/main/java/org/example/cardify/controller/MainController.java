@@ -383,10 +383,8 @@ public class MainController {
                 allRows.setAll(rows);
                 currentHeaders = new ArrayList<>(rows.get(0).headers());
                 rebuildColumns();
-                filteredRows.setPredicate(row -> true);
                 tableView.setItems(filteredRows);
-                rowCountLabel.setText(filteredRows.size() + " rows");
-                selectedCountLabel.setText("Selected: " + tableView.getSelectionModel().getSelectedItems().size());
+                updateFilters();
                 excelStatus.setText(path.getFileName() + " loaded with " + rows.size() + " row(s)");
                 preferences.saveExcelPath(path.toAbsolutePath().toString());
                 clearDataButton.setDisable(false);
@@ -659,7 +657,8 @@ public class MainController {
             UiDialog.warn(stage, "Missing template", "Upload an HTML template before printing.");
             return;
         }
-        if (tableView.getSelectionModel().getSelectedItems().isEmpty()) {
+        List<SpreadsheetRow> selectedRows = new ArrayList<>(filteredRows.stream().filter(SpreadsheetRow::isSelected).toList());
+        if (selectedRows.isEmpty()) {
             UiDialog.warn(stage, "Nothing selected", "Select one or more rows to print.");
             return;
         }
@@ -670,7 +669,6 @@ public class MainController {
             return;
         }
 
-        List<SpreadsheetRow> selectedRows = new ArrayList<>(tableView.getSelectionModel().getSelectedItems());
         String htmlTemplate = htmlTemplateService.readTemplate(htmlTemplateFile.toPath());
         printerService.printRows(printerName, htmlTemplate, selectedRows, getQrMappings());
         UiDialog.info(stage, "Print job started", "Sent " + selectedRows.size() + " row(s) to " + printerName + ".");
