@@ -660,7 +660,6 @@ public class MainController {
         List<SpreadsheetRow> selectedRows = new ArrayList<>(tableView.getSelectionModel().getSelectedItems());
         String htmlTemplate = htmlTemplateService.readTemplate(htmlTemplateFile.toPath());
         printerService.printRows(printerName, htmlTemplate, selectedRows, getQrMappings());
-        selectedRows.forEach(row -> row.setStatus("Printed"));
         UiDialog.info(stage, "Print job started", "Sent " + selectedRows.size() + " row(s) to " + printerName + ".");
     }
 

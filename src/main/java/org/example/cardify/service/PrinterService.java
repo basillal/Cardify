@@ -26,7 +26,13 @@ public class PrinterService {
     public void printRows(String printerName, String htmlTemplate, List<SpreadsheetRow> rows, java.util.Map<String, String> qrMappings) {
         Thread printThread = new Thread(() -> {
             for (SpreadsheetRow row : rows) {
-                printSingleRow(printerName, htmlTemplate, row, qrMappings);
+                Platform.runLater(() -> row.setStatus("Printing"));
+                try {
+                    printSingleRow(printerName, htmlTemplate, row, qrMappings);
+                    Platform.runLater(() -> row.setStatus("Printed"));
+                } catch (RuntimeException ex) {
+                    Platform.runLater(() -> row.setStatus("Error"));
+                }
             }
         }, "cardify-print-worker");
         printThread.setDaemon(true);
