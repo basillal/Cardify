@@ -46,8 +46,9 @@ public class ExcelTemplateService {
             guideSheet.createRow(2).createCell(0).setCellValue("1. Fill the Card Data sheet with one row per ID card.");
             guideSheet.createRow(3).createCell(0).setCellValue("2. Use the same placeholder names as the HTML template, for example name, department, photo.");
             guideSheet.createRow(4).createCell(0).setCellValue("3. For image placeholders, enter a local image file path such as /home/user/photos/employee.png.");
-            guideSheet.createRow(5).createCell(0).setCellValue("4. Import the workbook into the desktop app, select rows, and print.");
-            guideSheet.createRow(6).createCell(0).setCellValue("5. In HTML templates, place image placeholders inside src attributes, for example <img src=\"{{photo}}\" />.");
+            guideSheet.createRow(4).createCell(0).setCellValue("4. If the template includes QR placeholders, open the Template & Excel tab and choose which column each QR field should encode.");
+            guideSheet.createRow(5).createCell(0).setCellValue("5. Import the workbook into the desktop app, select rows, and print.");
+            guideSheet.createRow(6).createCell(0).setCellValue("6. In HTML templates, place image placeholders inside src attributes, for example <img src=\"{{photo}}\" />.");
 
             guideSheet.getRow(0).getCell(0).setCellStyle(headerStyle);
             for (int rowIndex = 2; rowIndex <= 6; rowIndex++) {

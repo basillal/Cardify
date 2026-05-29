@@ -20,16 +20,20 @@ public class PrinterService {
     }
 
     public void printRows(String printerName, String htmlTemplate, List<SpreadsheetRow> rows) {
+        printRows(printerName, htmlTemplate, rows, java.util.Map.of());
+    }
+
+    public void printRows(String printerName, String htmlTemplate, List<SpreadsheetRow> rows, java.util.Map<String, String> qrMappings) {
         Thread printThread = new Thread(() -> {
             for (SpreadsheetRow row : rows) {
-                printSingleRow(printerName, htmlTemplate, row);
+                printSingleRow(printerName, htmlTemplate, row, qrMappings);
             }
         }, "cardify-print-worker");
         printThread.setDaemon(true);
         printThread.start();
     }
 
-    private void printSingleRow(String printerName, String htmlTemplate, SpreadsheetRow row) {
+    private void printSingleRow(String printerName, String htmlTemplate, SpreadsheetRow row, java.util.Map<String, String> qrMappings) {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<RuntimeException> failure = new AtomicReference<>();
 
@@ -40,7 +44,7 @@ public class PrinterService {
                 webView.setMinSize(1024, 640);
                 webView.setMaxSize(1024, 640);
 
-                String renderedHtml = htmlTemplateService.renderTemplate(htmlTemplate, row.asMap());
+                String renderedHtml = htmlTemplateService.renderTemplate(htmlTemplate, row.asMap(), qrMappings);
                 webView.getEngine().getLoadWorker().stateProperty().addListener((observable, oldState, newState) -> {
                     if (newState == Worker.State.SUCCEEDED) {
                         try {

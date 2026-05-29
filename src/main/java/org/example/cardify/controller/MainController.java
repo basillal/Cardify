@@ -31,6 +31,8 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 
@@ -61,6 +63,9 @@ public class MainController {
     private final Button rowPreviewButton = new Button("Row Preview");
     private final Button exportExcelButton = new Button("Download Excel");
     private final Button editButton = new Button("Edit Rows");
+    private final VBox qrMappingBox = new VBox(8);
+    private final ObservableList<String> templatePlaceholders = FXCollections.observableArrayList();
+    private final Map<String, ComboBox<String>> qrMappingSelectors = new LinkedHashMap<>();
 
     private boolean syncingSelection = false;
     private boolean editingEnabled = false;
@@ -219,9 +224,11 @@ public class MainController {
         placeholdersArea.setEditable(false);
         placeholdersArea.setPrefRowCount(7);
         placeholdersArea.setPromptText("Detected placeholders will appear here");
+        qrMappingBox.getStyleClass().add("qr-mapping-box");
+        qrMappingBox.getChildren().setAll(new Label("No QR placeholders detected yet."));
 
         Label label = new Label("Detected placeholders");
-        VBox box = new VBox(8, label, placeholdersArea);
+        VBox box = new VBox(8, label, qrMappingBox, placeholdersArea);
         VBox.setVgrow(placeholdersArea, Priority.ALWAYS);
         return box;
     }
@@ -347,11 +354,17 @@ public class MainController {
         if (Files.exists(path) && Files.isRegularFile(path)) {
             htmlTemplateFile = path.toFile();
             Set<String> placeholders = htmlTemplateService.extractPlaceholders(path);
+            templatePlaceholders.setAll(placeholders);
             placeholdersArea.setText(String.join(System.lineSeparator(), placeholders));
+            refreshQrMappingControls(placeholders);
             templateStatus.setText(path.getFileName() + " loaded with " + placeholders.size() + " placeholder(s)");
             preferences.saveTemplatePath(path.toAbsolutePath().toString());
             removeTemplateButton.setDisable(false);
         } else {
+            htmlTemplateFile = null;
+            templatePlaceholders.clear();
+            qrMappingSelectors.clear();
+            qrMappingBox.getChildren().setAll(new Label("No HTML template loaded"));
             preferences.clearSavedTemplatePath();
         }
     }
@@ -409,7 +422,14 @@ public class MainController {
 
     private void toggleEditMode() {
         editingEnabled = !editingEnabled;
-        editButton.setText(editingEnabled ? "Stop Editing" : "Edit Rows");
+        editButton.setText(editingEnabled ? "Edit Mode" : "Edit Rows");
+        if (editingEnabled) {
+            if (!editButton.getStyleClass().contains("edit-mode")) {
+                editButton.getStyleClass().add("edit-mode");
+            }
+        } else {
+            editButton.getStyleClass().remove("edit-mode");
+        }
         for (int i = 1; i < tableView.getColumns().size(); i++) {
             tableView.getColumns().get(i).setEditable(editingEnabled);
         }
@@ -439,6 +459,9 @@ public class MainController {
     private void clearTemplate() {
         htmlTemplateFile = null;
         placeholdersArea.clear();
+        templatePlaceholders.clear();
+        qrMappingSelectors.clear();
+        qrMappingBox.getChildren().setAll(new Label("No HTML template loaded"));
         templateStatus.setText("No HTML template loaded");
         preferences.clearSavedTemplatePath();
         removeTemplateButton.setDisable(true);
@@ -478,7 +501,7 @@ public class MainController {
             sampleValues.put(placeholder, "Sample " + placeholder);
         }
 
-        openPreviewWindow("Template Preview", htmlTemplateService.renderTemplate(htmlTemplate, sampleValues));
+        openPreviewWindow("Template Preview", htmlTemplateService.renderTemplate(htmlTemplate, sampleValues, getQrMappings()));
     }
 
     private void showRowPreview() {
@@ -494,7 +517,7 @@ public class MainController {
 
         SpreadsheetRow previewRow = tableView.getSelectionModel().getSelectedItems().get(0);
         String htmlTemplate = htmlTemplateService.readTemplate(htmlTemplateFile.toPath());
-        openPreviewWindow("Row Preview", htmlTemplateService.renderTemplate(htmlTemplate, previewRow.asMap()));
+        openPreviewWindow("Row Preview", htmlTemplateService.renderTemplate(htmlTemplate, previewRow.asMap(), getQrMappings()));
     }
 
     private void openPreviewWindow(String title, String renderedHtml) {
@@ -644,9 +667,63 @@ public class MainController {
 
         List<SpreadsheetRow> selectedRows = new ArrayList<>(tableView.getSelectionModel().getSelectedItems());
         String htmlTemplate = htmlTemplateService.readTemplate(htmlTemplateFile.toPath());
-        printerService.printRows(printerName, htmlTemplate, selectedRows);
+        printerService.printRows(printerName, htmlTemplate, selectedRows, getQrMappings());
         selectedRows.forEach(row -> row.setStatus("Printed"));
         UiDialog.info(stage, "Print job started", "Sent " + selectedRows.size() + " row(s) to " + printerName + ".");
+    }
+
+    private void refreshQrMappingControls(Set<String> placeholders) {
+        qrMappingSelectors.clear();
+        qrMappingBox.getChildren().clear();
+
+        List<String> qrPlaceholders = placeholders.stream()
+                .filter(htmlTemplateService::looksLikeQrPlaceholder)
+                .toList();
+
+        if (qrPlaceholders.isEmpty()) {
+            qrMappingBox.getChildren().add(new Label("No QR placeholders detected in this template."));
+            return;
+        }
+
+        Label question = new Label("Which field should be turned into a QR code?");
+        question.getStyleClass().add("section-title");
+        Label help = new Label("Pick the source column for each QR placeholder. The dropdown shows all template placeholders.");
+        help.getStyleClass().add("section-description");
+        help.setWrapText(true);
+        qrMappingBox.getChildren().addAll(question, help);
+
+        for (String qrPlaceholder : qrPlaceholders) {
+            Label fieldLabel = new Label(qrPlaceholder);
+            fieldLabel.getStyleClass().add("footer-label");
+
+            ComboBox<String> sourceChoice = new ComboBox<>(templatePlaceholders);
+            sourceChoice.getStyleClass().add("qr-source-choice");
+            sourceChoice.setMaxWidth(Double.MAX_VALUE);
+
+            if (templatePlaceholders.contains(qrPlaceholder)) {
+                sourceChoice.setValue(qrPlaceholder);
+            } else if (!templatePlaceholders.isEmpty()) {
+                sourceChoice.setValue(templatePlaceholders.get(0));
+            }
+
+            qrMappingSelectors.put(qrPlaceholder, sourceChoice);
+
+            HBox mappingRow = new HBox(12, fieldLabel, sourceChoice);
+            mappingRow.setAlignment(Pos.CENTER_LEFT);
+            HBox.setHgrow(sourceChoice, Priority.ALWAYS);
+            qrMappingBox.getChildren().add(mappingRow);
+        }
+    }
+
+    private Map<String, String> getQrMappings() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        for (Map.Entry<String, ComboBox<String>> entry : qrMappingSelectors.entrySet()) {
+            String selectedSource = entry.getValue().getValue();
+            if (selectedSource != null && !selectedSource.isBlank()) {
+                mappings.put(entry.getKey(), selectedSource);
+            }
+        }
+        return mappings;
     }
 
     private VBox createSectionHeader(String title, String description) {

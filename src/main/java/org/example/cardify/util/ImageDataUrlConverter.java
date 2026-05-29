@@ -1,12 +1,24 @@
 package org.example.cardify.util;
 
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.WriterException;
+import com.google.zxing.client.j2se.MatrixToImageWriter;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
+
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
 import java.util.Locale;
 
+import javax.imageio.ImageIO;
+
 public final class ImageDataUrlConverter {
+    private static final int QR_SIZE = 320;
+
     private ImageDataUrlConverter() {
     }
 
@@ -31,6 +43,24 @@ public final class ImageDataUrlConverter {
             return "data:" + mediaType + ";base64," + Base64.getEncoder().encodeToString(bytes);
         } catch (IOException exception) {
             throw new IllegalStateException("Unable to read image file: " + imagePath, exception);
+        }
+    }
+
+    public static String toQrCodeDataUrl(String content) {
+        String value = content == null ? "" : content.trim();
+        if (value.isBlank()) {
+            return "";
+        }
+
+        try {
+            QRCodeWriter writer = new QRCodeWriter();
+            BitMatrix matrix = writer.encode(value, BarcodeFormat.QR_CODE, QR_SIZE, QR_SIZE);
+            BufferedImage image = MatrixToImageWriter.toBufferedImage(matrix);
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            ImageIO.write(image, "png", outputStream);
+            return "data:image/png;base64," + Base64.getEncoder().encodeToString(outputStream.toByteArray());
+        } catch (WriterException | IOException exception) {
+            throw new IllegalStateException("Unable to generate QR code", exception);
         }
     }
 
