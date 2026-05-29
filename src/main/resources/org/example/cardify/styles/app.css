@@ -132,6 +132,12 @@
     -fx-text-fill: #e2e8f0;
 }
 
+.app-root.dark-theme .text-field,
+.app-root.dark-theme .text-area,
+.app-root.dark-theme .choice-box {
+    -fx-prompt-text-fill: rgba(255, 255, 255, 0.7);
+}
+
 .app-root.light-theme .label,
 .app-root.light-theme .text-field,
 .app-root.light-theme .text-area,

@@ -3,12 +3,14 @@ package org.example.cardify.controller;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
+import javafx.collections.ListChangeListener;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.control.cell.CheckBoxTableCell;
 import javafx.scene.layout.*;
 import javafx.scene.web.WebView;
 import javafx.stage.FileChooser;
@@ -45,11 +47,13 @@ public class MainController {
     private final Label templateStatus = new Label("No HTML template loaded");
     private final Label excelStatus = new Label("No Excel file loaded");
     private final Label rowCountLabel = new Label("0 rows");
+    private final Label selectedCountLabel = new Label("Selected: 0");
     private final ChoiceBox<String> printerChoice = new ChoiceBox<>();
     private final TextField searchField = new TextField();
     private final ToggleButton themeToggle = new ToggleButton("Light");
     private final Button removeTemplateButton = new Button("Remove Template");
     private final Button clearDataButton = new Button("Clear Imported Data");
+    private final Button rowPreviewButton = new Button("Row Preview");
 
     private final AppPreferencesService preferences = new AppPreferencesService();
 
@@ -215,8 +219,8 @@ public class MainController {
         Button uploadExcelButton = new Button("Upload Filled Excel");
         uploadExcelButton.setOnAction(event -> uploadExcel());
 
-        Button rowPreviewButton = new Button("Row Preview");
         rowPreviewButton.setOnAction(event -> showRowPreview());
+        rowPreviewButton.setDisable(true);
 
         Button printButton = new Button("Print Selected Rows");
         printButton.setOnAction(event -> printSelectedRows());
@@ -234,8 +238,7 @@ public class MainController {
         searchField.setPromptText("Filter rows by any column value");
         searchField.setPrefWidth(320);
 
-        VBox statusBlock = new VBox(6, new Label("Import status"), excelStatus, rowCountLabel);
-        HBox controls = new HBox(12, uploadExcelButton, rowPreviewButton, printButton, selectAllButton, clearSelectionButton, clearDataButton, searchField, statusBlock);
+        HBox controls = new HBox(12, searchField, uploadExcelButton, rowPreviewButton, printButton, selectAllButton, clearSelectionButton, clearDataButton);
         controls.setAlignment(Pos.CENTER_LEFT);
         controls.setPadding(new Insets(4, 0, 0, 0));
         HBox.setHgrow(searchField, Priority.ALWAYS);
@@ -248,11 +251,36 @@ public class MainController {
         tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         tableView.setPlaceholder(new Label("Import an Excel file to see rows here"));
         tableView.getStyleClass().add("data-table");
+        tableView.setEditable(true);
         VBox.setVgrow(tableView, Priority.ALWAYS);
+
+        tableView.getSelectionModel().getSelectedItems().addListener((ListChangeListener<SpreadsheetRow>) c -> {
+            while (c.next()) {
+                for (SpreadsheetRow removed : c.getRemoved()) {
+                    if (removed.isSelected()) {
+                        removed.selectedProperty().set(false);
+                    }
+                }
+                for (SpreadsheetRow added : c.getAddedSubList()) {
+                    if (!added.isSelected()) {
+                        added.selectedProperty().set(true);
+                    }
+                }
+            }
+            int selectedCount = tableView.getSelectionModel().getSelectedItems().size();
+            selectedCountLabel.setText("Selected: " + selectedCount);
+            rowPreviewButton.setDisable(selectedCount != 1);
+        });
+
+        HBox statusBar = new HBox(18, excelStatus, rowCountLabel, selectedCountLabel);
+        statusBar.setAlignment(Pos.CENTER_LEFT);
+        selectedCountLabel.getStyleClass().add("status-label");
+        rowCountLabel.getStyleClass().add("status-label");
+        excelStatus.getStyleClass().add("status-label");
 
         Label hint = new Label("Click one or more rows, then print. Each selected row becomes one ID card output.");
         hint.getStyleClass().add("table-hint");
-        return new VBox(8, hint, tableView);
+        return new VBox(10, statusBar, hint, tableView);
     }
 
     private void installSearch() {
@@ -314,12 +342,14 @@ public class MainController {
             List<SpreadsheetRow> rows = excelImportService.readRows(path);
             if (!rows.isEmpty()) {
                 excelFile = path.toFile();
+                rows.forEach(row -> bindRowSelection(row));
                 allRows.setAll(rows);
                 currentHeaders = new ArrayList<>(rows.get(0).headers());
                 rebuildColumns();
                 filteredRows.setPredicate(row -> true);
                 tableView.setItems(filteredRows);
                 rowCountLabel.setText(filteredRows.size() + " rows");
+                selectedCountLabel.setText("Selected: " + tableView.getSelectionModel().getSelectedItems().size());
                 excelStatus.setText(path.getFileName() + " loaded with " + rows.size() + " row(s)");
                 preferences.saveExcelPath(path.toAbsolutePath().toString());
                 clearDataButton.setDisable(false);
@@ -327,6 +357,16 @@ public class MainController {
         } else {
             preferences.clearSavedExcelPath();
         }
+    }
+
+    private void bindRowSelection(SpreadsheetRow row) {
+        row.selectedProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue && !tableView.getSelectionModel().getSelectedItems().contains(row)) {
+                tableView.getSelectionModel().select(row);
+            } else if (!newValue && tableView.getSelectionModel().getSelectedItems().contains(row)) {
+                tableView.getSelectionModel().clearSelection(tableView.getItems().indexOf(row));
+            }
+        });
     }
 
     private void uploadTemplate() {
@@ -442,6 +482,7 @@ public class MainController {
         tableView.setItems(filteredRows);
         filteredRows.setPredicate(row -> true);
         rowCountLabel.setText("0 rows");
+        selectedCountLabel.setText("Selected: 0");
         excelStatus.setText("No Excel file loaded");
         preferences.clearSavedExcelPath();
         clearDataButton.setDisable(true);
@@ -449,6 +490,16 @@ public class MainController {
 
     private void rebuildColumns() {
         tableView.getColumns().clear();
+
+        TableColumn<SpreadsheetRow, Boolean> selectColumn = new TableColumn<>();
+        selectColumn.setCellValueFactory(cellData -> cellData.getValue().selectedProperty());
+        selectColumn.setCellFactory(CheckBoxTableCell.forTableColumn(selectColumn));
+        selectColumn.setEditable(true);
+        selectColumn.setPrefWidth(50);
+        selectColumn.setText("");
+        selectColumn.setStyle("-fx-alignment: CENTER;");
+        tableView.getColumns().add(selectColumn);
+
         for (String header : currentHeaders) {
             TableColumn<SpreadsheetRow, String> column = new TableColumn<>(header);
             column.setCellValueFactory(cellData -> cellData.getValue().valueProperty(header));
