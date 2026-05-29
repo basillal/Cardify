@@ -70,7 +70,7 @@ public class MainController {
 
     public void initialize() {
         buildLayout();
-        applyTheme(false);
+        applyTheme(true);
         refreshPrinters();
         installSearch();
         restoreSavedState();

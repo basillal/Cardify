@@ -139,6 +139,56 @@
     -fx-text-fill: #1f2937;
 }
 
+/* Light theme: make input controls have light backgrounds */
+.app-root.light-theme .text-field,
+.app-root.light-theme .text-area,
+.app-root.light-theme .choice-box {
+    -fx-background-color: rgba(255, 255, 255, 0.95);
+    -fx-control-inner-background: white;
+    -fx-border-color: rgba(156, 163, 175, 0.35);
+}
+
+/* Light theme: tab and tabs area background */
+.app-root.light-theme .content-tabs .tab-header-area {
+    -fx-background-color: rgba(255, 255, 255, 0.95);
+    -fx-padding: 0 0 8 0;
+}
+
+.app-root.light-theme .content-tabs .tab-header-background,
+.app-root.light-theme .content-tabs .headers-region,
+.app-root.light-theme .content-tabs .tab-content-area,
+.app-root.light-theme .content-tabs .tab-pane,
+.app-root.light-theme .content-tabs .tab-pane .content {
+    -fx-background-color: transparent;
+}
+
+.app-root.light-theme .content-tabs .tab {
+    -fx-background-color: rgba(255, 255, 255, 0.9);
+    -fx-border-color: rgba(156, 163, 175, 0.25);
+    -fx-background-radius: 16 16 0 0;
+    -fx-border-radius: 16 16 0 0;
+    -fx-padding: 10 14;
+}
+
+.app-root.light-theme .content-tabs .tab-label {
+    -fx-text-fill: #374151;
+}
+
+/* Make selected tab in light theme match dark-theme blue styling */
+.app-root.light-theme .content-tabs .tab:selected {
+    -fx-background-color: linear-gradient(to bottom, rgba(56, 189, 248, 0.95), rgba(37, 99, 235, 0.95));
+}
+
+.app-root.light-theme .content-tabs .tab:selected .tab-label {
+    -fx-text-fill: white;
+}
+
+/* Dark theme: ensure table row text is light-colored */
+.app-root.dark-theme .table-row-cell,
+.app-root.dark-theme .table-view .cell {
+    -fx-text-fill: #f8fafc;
+}
+
 .app-root.light-theme .section-title {
     -fx-text-fill: #111827;
 }
