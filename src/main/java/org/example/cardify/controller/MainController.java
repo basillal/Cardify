@@ -15,12 +15,14 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import org.example.cardify.model.SpreadsheetRow;
 import org.example.cardify.service.ExcelImportService;
+import org.example.cardify.service.AppPreferencesService;
 import org.example.cardify.service.ExcelTemplateService;
 import org.example.cardify.service.HtmlTemplateService;
 import org.example.cardify.service.PrinterService;
 import org.example.cardify.util.UiDialog;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,11 +47,16 @@ public class MainController {
     private final Label rowCountLabel = new Label("0 rows");
     private final ChoiceBox<String> printerChoice = new ChoiceBox<>();
     private final TextField searchField = new TextField();
+    private final Button removeTemplateButton = new Button("Remove Template");
+    private final Button clearDataButton = new Button("Clear Imported Data");
+
+    private final AppPreferencesService preferences = new AppPreferencesService();
 
     private Stage previewStage;
     private WebView previewWebView;
 
     private File htmlTemplateFile;
+    private File excelFile;
     private List<String> currentHeaders = List.of();
 
     public MainController(Stage stage) {
@@ -64,6 +71,7 @@ public class MainController {
         buildLayout();
         refreshPrinters();
         installSearch();
+        restoreSavedState();
     }
 
     private void buildLayout() {
@@ -91,28 +99,41 @@ public class MainController {
     }
 
     private Node buildContent() {
-        VBox templateSection = new VBox(14,
-                createSectionHeader("1. Template to Excel", "Upload an HTML template containing placeholders like {{name}} or {{photo}}."),
-                buildTemplateControls(),
-                buildTemplatePreview()
-        );
-        templateSection.getStyleClass().add("content-card");
-
         VBox dataSection = new VBox(14,
-                createSectionHeader("2. Data Import and Print", "Load the filled Excel sheet, select rows, then print to the active printer."),
+                createSectionHeader("Data Table and Print", "Most users will print from the loaded Excel rows. Select rows and print from here."),
                 buildDataControls(),
                 buildTablePanel()
         );
         dataSection.getStyleClass().add("content-card");
+        dataSection.setFillWidth(true);
 
-        VBox sections = new VBox(18, templateSection, dataSection);
-        sections.setPadding(new Insets(24));
-        sections.setFillWidth(true);
-        ScrollPane scrollPane = new ScrollPane(sections);
-        scrollPane.setFitToWidth(true);
-        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        scrollPane.getStyleClass().add("content-scroll");
-        return scrollPane;
+        VBox setupSection = new VBox(14,
+                createSectionHeader("Template and Excel Setup", "Upload your HTML template once, then generate or load the Excel sheet for repeated printing."),
+                buildTemplateControls(),
+                buildTemplatePreview()
+        );
+        setupSection.getStyleClass().add("content-card");
+        setupSection.setFillWidth(true);
+
+        Tab dataTab = new Tab("Data");
+        dataTab.setContent(dataSection);
+        dataTab.setClosable(false);
+
+        Tab setupTab = new Tab("Template & Excel");
+        setupTab.setContent(setupSection);
+        setupTab.setClosable(false);
+
+        TabPane tabPane = new TabPane(dataTab, setupTab);
+        tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        tabPane.getStyleClass().add("content-tabs");
+        tabPane.tabMinWidthProperty().bind(tabPane.widthProperty().divide(2).subtract(8));
+        tabPane.tabMaxWidthProperty().bind(tabPane.widthProperty().divide(2).subtract(8));
+
+        VBox wrapper = new VBox(tabPane);
+        wrapper.setPadding(new Insets(24));
+        wrapper.setFillWidth(true);
+        VBox.setVgrow(tabPane, Priority.ALWAYS);
+        return wrapper;
     }
 
     private Node buildFooter() {
@@ -149,12 +170,17 @@ public class MainController {
         Button templatePreviewButton = new Button("Template Preview");
         templatePreviewButton.setOnAction(event -> showTemplatePreview());
 
+        removeTemplateButton.setOnAction(event -> clearTemplate());
+        removeTemplateButton.getStyleClass().add("negative-button");
+        removeTemplateButton.setDisable(true);
+
         templateStatus.getStyleClass().add("status-label");
         VBox statusBlock = new VBox(6, new Label("Template status"), templateStatus);
 
-        HBox controls = new HBox(12, uploadButton, generateButton, templatePreviewButton, statusBlock);
+        HBox controls = new HBox(12, uploadButton, generateButton, templatePreviewButton, removeTemplateButton, statusBlock);
         controls.setAlignment(Pos.CENTER_LEFT);
         controls.setPadding(new Insets(4, 0, 0, 0));
+        controls.getStyleClass().add("control-row");
         return controls;
     }
 
@@ -185,14 +211,19 @@ public class MainController {
         Button clearSelectionButton = new Button("Clear Selection");
         clearSelectionButton.setOnAction(event -> tableView.getSelectionModel().clearSelection());
 
+        clearDataButton.setOnAction(event -> clearImportedData());
+        clearDataButton.getStyleClass().add("negative-button");
+        clearDataButton.setDisable(true);
+
         searchField.setPromptText("Filter rows by any column value");
         searchField.setPrefWidth(320);
 
         VBox statusBlock = new VBox(6, new Label("Import status"), excelStatus, rowCountLabel);
-        HBox controls = new HBox(12, uploadExcelButton, rowPreviewButton, printButton, selectAllButton, clearSelectionButton, searchField, statusBlock);
+        HBox controls = new HBox(12, uploadExcelButton, rowPreviewButton, printButton, selectAllButton, clearSelectionButton, clearDataButton, searchField, statusBlock);
         controls.setAlignment(Pos.CENTER_LEFT);
         controls.setPadding(new Insets(4, 0, 0, 0));
         HBox.setHgrow(searchField, Priority.ALWAYS);
+        controls.getStyleClass().add("control-row");
         return controls;
     }
 
@@ -238,6 +269,50 @@ public class MainController {
         }
     }
 
+    private void restoreSavedState() {
+        String savedTemplate = preferences.getSavedTemplatePath();
+        if (savedTemplate != null && !savedTemplate.isBlank()) {
+            loadTemplateFromPath(Path.of(savedTemplate));
+        }
+        String savedExcel = preferences.getSavedExcelPath();
+        if (savedExcel != null && !savedExcel.isBlank()) {
+            loadExcelFromPath(Path.of(savedExcel));
+        }
+    }
+
+    private void loadTemplateFromPath(Path path) {
+        if (Files.exists(path) && Files.isRegularFile(path)) {
+            htmlTemplateFile = path.toFile();
+            Set<String> placeholders = htmlTemplateService.extractPlaceholders(path);
+            placeholdersArea.setText(String.join(System.lineSeparator(), placeholders));
+            templateStatus.setText(path.getFileName() + " loaded with " + placeholders.size() + " placeholder(s)");
+            preferences.saveTemplatePath(path.toAbsolutePath().toString());
+            removeTemplateButton.setDisable(false);
+        } else {
+            preferences.clearSavedTemplatePath();
+        }
+    }
+
+    private void loadExcelFromPath(Path path) {
+        if (Files.exists(path) && Files.isRegularFile(path)) {
+            List<SpreadsheetRow> rows = excelImportService.readRows(path);
+            if (!rows.isEmpty()) {
+                excelFile = path.toFile();
+                allRows.setAll(rows);
+                currentHeaders = new ArrayList<>(rows.get(0).headers());
+                rebuildColumns();
+                filteredRows.setPredicate(row -> true);
+                tableView.setItems(filteredRows);
+                rowCountLabel.setText(filteredRows.size() + " rows");
+                excelStatus.setText(path.getFileName() + " loaded with " + rows.size() + " row(s)");
+                preferences.saveExcelPath(path.toAbsolutePath().toString());
+                clearDataButton.setDisable(false);
+            }
+        } else {
+            preferences.clearSavedExcelPath();
+        }
+    }
+
     private void uploadTemplate() {
         FileChooser chooser = new FileChooser();
         chooser.setTitle("Select HTML Template");
@@ -246,11 +321,15 @@ public class MainController {
         if (selected == null) {
             return;
         }
+        loadTemplateFromPath(selected.toPath());
+    }
 
-        htmlTemplateFile = selected;
-        Set<String> placeholders = htmlTemplateService.extractPlaceholders(selected.toPath());
-        placeholdersArea.setText(String.join(System.lineSeparator(), placeholders));
-        templateStatus.setText(selected.getName() + " loaded with " + placeholders.size() + " placeholder(s)");
+    private void clearTemplate() {
+        htmlTemplateFile = null;
+        placeholdersArea.clear();
+        templateStatus.setText("No HTML template loaded");
+        preferences.clearSavedTemplatePath();
+        removeTemplateButton.setDisable(true);
     }
 
     private void downloadExcelTemplate() {
@@ -336,20 +415,20 @@ public class MainController {
         if (selected == null) {
             return;
         }
+        loadExcelFromPath(selected.toPath());
+    }
 
-        List<SpreadsheetRow> rows = excelImportService.readRows(selected.toPath());
-        if (rows.isEmpty()) {
-            UiDialog.warn(stage, "No data found", "The selected workbook does not contain any data rows.");
-            return;
-        }
-
-        allRows.setAll(rows);
-        currentHeaders = new ArrayList<>(rows.get(0).headers());
-        rebuildColumns();
-        filteredRows.setPredicate(row -> true);
+    private void clearImportedData() {
+        excelFile = null;
+        allRows.clear();
+        currentHeaders = List.of();
+        tableView.getColumns().clear();
         tableView.setItems(filteredRows);
-        rowCountLabel.setText(filteredRows.size() + " rows");
-        excelStatus.setText(selected.getName() + " loaded with " + rows.size() + " row(s)");
+        filteredRows.setPredicate(row -> true);
+        rowCountLabel.setText("0 rows");
+        excelStatus.setText("No Excel file loaded");
+        preferences.clearSavedExcelPath();
+        clearDataButton.setDisable(true);
     }
 
     private void rebuildColumns() {
