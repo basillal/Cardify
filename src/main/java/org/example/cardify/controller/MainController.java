@@ -249,7 +249,7 @@ public class MainController {
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox controls = new HBox(12, searchField, uploadExcelButton, rowPreviewButton, exportExcelButton, editButton, spacer, printButton, clearDataButton);
+        HBox controls = new HBox(12, searchField, uploadExcelButton, rowPreviewButton, exportExcelButton, editButton, clearDataButton, spacer, printButton);
         controls.setAlignment(Pos.CENTER_LEFT);
         controls.setPadding(new Insets(4, 0, 0, 0));
         controls.getStyleClass().add("control-row");
@@ -271,8 +271,9 @@ public class MainController {
             syncingSelection = true;
             while (c.next()) {
                 for (SpreadsheetRow removed : c.getRemoved()) {
-                    // Only unselect if the row is still visible; filtered-out rows should keep their selected state.
-                    if (removed.isSelected() && filteredRows.contains(removed)) {
+                    // If a row is removed from the table selection and it's visible,
+                    // ensure the model's selected flag is cleared so header checkbox updates correctly.
+                    if (filteredRows.contains(removed)) {
                         removed.selectedProperty().set(false);
                     }
                 }
@@ -592,15 +593,15 @@ public class MainController {
         selectColumn.setSortable(false);
         selectColumn.setReorderable(false);
         selectAllCheckBox.setAllowIndeterminate(true);
+        // Toggle visible rows based on their current model state instead of relying on checkbox state.
         selectAllCheckBox.addEventFilter(MouseEvent.MOUSE_PRESSED, evt -> {
             headerCheckboxIndeterminateClick = selectAllCheckBox.isIndeterminate();
         });
         selectAllCheckBox.setOnAction(evt -> {
-            if (headerCheckboxIndeterminateClick) {
-                filteredRows.forEach(row -> row.selectedProperty().set(false));
-            } else {
-                boolean selectAll = selectAllCheckBox.isSelected();
-                filteredRows.forEach(row -> row.selectedProperty().set(selectAll));
+            boolean currentlyAllSelected = !filteredRows.isEmpty() && filteredRows.stream().allMatch(SpreadsheetRow::isSelected);
+            boolean select = !currentlyAllSelected;
+            for (SpreadsheetRow row : filteredRows) {
+                row.selectedProperty().set(select);
             }
             updateSelectedCount();
             headerCheckboxIndeterminateClick = false;
