@@ -47,6 +47,7 @@ public class MainController {
     private final Label rowCountLabel = new Label("0 rows");
     private final ChoiceBox<String> printerChoice = new ChoiceBox<>();
     private final TextField searchField = new TextField();
+    private final ToggleButton themeToggle = new ToggleButton("Light");
     private final Button removeTemplateButton = new Button("Remove Template");
     private final Button clearDataButton = new Button("Clear Imported Data");
 
@@ -69,6 +70,7 @@ public class MainController {
 
     public void initialize() {
         buildLayout();
+        applyTheme(false);
         refreshPrinters();
         installSearch();
         restoreSavedState();
@@ -81,20 +83,34 @@ public class MainController {
         root.getStyleClass().add("app-root");
     }
 
+    private void applyTheme(boolean light) {
+        themeToggle.setSelected(light);
+        themeToggle.setText(light ? "Dark" : "Light");
+
+        root.getStyleClass().removeAll("dark-theme", "light-theme");
+        root.getStyleClass().add(light ? "light-theme" : "dark-theme");
+    }
+
     private Node buildHeader() {
         Label title = new Label("Cardify Desktop Studio");
         title.getStyleClass().add("app-title");
 
-        Label subtitle = new Label("Upload an HTML card template, generate an Excel data sheet, import filled rows, then print selected ID cards to a connected printer.");
-        subtitle.getStyleClass().add("app-subtitle");
+        Label subtitle = new Label("Streamline your ID card workflow — from data import to print-ready output.");        subtitle.getStyleClass().add("app-subtitle");
         subtitle.setWrapText(true);
 
         VBox textBlock = new VBox(6, title, subtitle);
         textBlock.getStyleClass().add("header-block");
 
-        HBox header = new HBox(textBlock);
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        themeToggle.setOnAction(event -> applyTheme(themeToggle.isSelected()));
+        themeToggle.getStyleClass().add("theme-toggle");
+
+        HBox header = new HBox(textBlock, spacer, themeToggle);
         header.getStyleClass().add("app-header");
-        header.setPadding(new Insets(28));
+        header.setPadding(new Insets(24, 28, 24, 28));
+        header.setAlignment(Pos.CENTER_LEFT);
         return header;
     }
 
