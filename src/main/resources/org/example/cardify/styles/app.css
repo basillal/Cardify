@@ -1,0 +1,372 @@
+.app-root {
+    -fx-font-family: "Segoe UI", "Inter", "Arial", sans-serif;
+}
+
+.app-root.dark-theme {
+    -fx-background-color: linear-gradient(to bottom right, #0f172a 0%, #111827 45%, #1f2937 100%);
+}
+
+.app-root.light-theme {
+    -fx-background-color: linear-gradient(to bottom right, #f3f4f6 0%, #e5e7eb 45%, #d1d5db 100%);
+}
+
+.app-header {
+    -fx-background-color: rgba(15, 23, 42, 0.92);
+    -fx-border-color: rgba(148, 163, 184, 0.18);
+    -fx-border-width: 0 0 1 0;
+}
+
+.app-root.light-theme .app-header {
+    -fx-background-color: rgba(255, 255, 255, 0.9);
+    -fx-border-color: rgba(107, 114, 128, 0.18);
+}
+
+.header-block {
+    -fx-padding: 0;
+}
+
+.app-title {
+    -fx-text-fill: white;
+    -fx-font-size: 28px;
+    -fx-font-weight: 700;
+}
+
+.app-subtitle {
+    -fx-text-fill: #cbd5e1;
+    -fx-font-size: 13px;
+    -fx-max-width: 1100px;
+}
+
+.content-scroll {
+    -fx-background: transparent;
+    -fx-background-color: transparent;
+}
+
+.content-card {
+    -fx-background-color: rgba(15, 23, 42, 0.76);
+    -fx-background-radius: 18;
+    -fx-border-radius: 18;
+    -fx-border-color: rgba(148, 163, 184, 0.14);
+    -fx-border-width: 1;
+    -fx-padding: 20;
+}
+
+.content-tabs {
+    -fx-background-color: transparent;
+}
+
+.content-tabs .tab-header-area {
+    -fx-background-color: rgba(15, 23, 42, 0.96);
+    -fx-padding: 0 0 8 0;
+}
+
+.content-tabs .tab-header-background,
+.content-tabs .headers-region,
+.content-tabs .tab-content-area,
+.content-tabs .tab-pane,
+.content-tabs .tab-pane .content {
+    -fx-background-color: rgba(15, 23, 42, 0.98);
+}
+
+.content-tabs .tab {
+    -fx-background-color: rgba(30, 41, 59, 0.85);
+    -fx-background-radius: 16 16 0 0;
+    -fx-border-radius: 16 16 0 0;
+    -fx-padding: 10 14;
+}
+
+.content-tabs .tab:selected {
+    -fx-background-color: linear-gradient(to bottom, rgba(56, 189, 248, 0.95), rgba(37, 99, 235, 0.95));
+}
+
+.content-tabs .tab-label {
+    -fx-text-fill: #cbd5e1;
+    -fx-font-weight: 700;
+}
+
+.content-tabs .tab:selected .tab-label {
+    -fx-text-fill: white;
+}
+
+.dialog-pane {
+    -fx-background-color: rgba(15, 23, 42, 0.98);
+    -fx-padding: 16;
+    -fx-border-color: rgba(148, 163, 184, 0.18);
+    -fx-border-width: 1;
+}
+
+.dialog-pane .content {
+    -fx-background-color: transparent;
+}
+
+.dialog-pane .label {
+    -fx-text-fill: #e2e8f0;
+}
+
+.dialog-pane .header-panel {
+    -fx-background-color: transparent;
+}
+
+.dialog-pane .button {
+    -fx-background-color: linear-gradient(to bottom, #38bdf8, #2563eb);
+    -fx-text-fill: white;
+    -fx-background-radius: 10;
+}
+
+.dialog-pane .button:hover {
+    -fx-background-color: linear-gradient(to bottom, #67e8f9, #3b82f6);
+}
+
+.section-title {
+    -fx-text-fill: #f8fafc;
+    -fx-font-size: 18px;
+    -fx-font-weight: 700;
+}
+
+.section-description {
+    -fx-text-fill: #cbd5e1;
+    -fx-font-size: 12px;
+}
+
+.label, .text-area, .text-field, .choice-box {
+    -fx-text-fill: #e2e8f0;
+}
+
+.app-root.dark-theme .text-field,
+.app-root.dark-theme .text-area,
+.app-root.dark-theme .choice-box {
+    -fx-prompt-text-fill: rgba(255, 255, 255, 0.7);
+}
+
+.app-root.light-theme .label,
+.app-root.light-theme .text-field,
+.app-root.light-theme .text-area,
+.app-root.light-theme .choice-box {
+    -fx-text-fill: #1f2937;
+}
+
+/* Light theme: make input controls have light backgrounds */
+.app-root.light-theme .text-field,
+.app-root.light-theme .text-area,
+.app-root.light-theme .choice-box {
+    -fx-background-color: rgba(255, 255, 255, 0.95);
+    -fx-control-inner-background: white;
+    -fx-border-color: rgba(156, 163, 175, 0.35);
+}
+
+/* Light theme: tab and tabs area background */
+.app-root.light-theme .content-tabs .tab-header-area {
+    -fx-background-color: rgba(255, 255, 255, 0.95);
+    -fx-padding: 0 0 8 0;
+}
+
+.app-root.light-theme .content-tabs .tab-header-background,
+.app-root.light-theme .content-tabs .headers-region,
+.app-root.light-theme .content-tabs .tab-content-area,
+.app-root.light-theme .content-tabs .tab-pane,
+.app-root.light-theme .content-tabs .tab-pane .content {
+    -fx-background-color: transparent;
+}
+
+.app-root.light-theme .content-tabs .tab {
+    -fx-background-color: rgba(255, 255, 255, 0.9);
+    -fx-border-color: rgba(156, 163, 175, 0.25);
+    -fx-background-radius: 16 16 0 0;
+    -fx-border-radius: 16 16 0 0;
+    -fx-padding: 10 14;
+}
+
+.app-root.light-theme .content-tabs .tab-label {
+    -fx-text-fill: #374151;
+}
+
+/* Make selected tab in light theme match dark-theme blue styling */
+.app-root.light-theme .content-tabs .tab:selected {
+    -fx-background-color: linear-gradient(to bottom, rgba(56, 189, 248, 0.95), rgba(37, 99, 235, 0.95));
+}
+
+.app-root.light-theme .content-tabs .tab:selected .tab-label {
+    -fx-text-fill: white;
+}
+
+/* Dark theme: ensure table row text is light-colored */
+.app-root.dark-theme .table-row-cell,
+.app-root.dark-theme .table-view .cell {
+    -fx-text-fill: #f8fafc;
+}
+
+.app-root.light-theme .section-title {
+    -fx-text-fill: #111827;
+}
+
+.app-root.light-theme .section-description,
+.app-root.light-theme .table-hint,
+.app-root.light-theme .footer-help,
+.app-root.light-theme .footer-label,
+.app-root.light-theme .status-label {
+    -fx-text-fill: #4b5563;
+}
+
+.app-root.light-theme .content-card {
+    -fx-background-color: rgba(255, 255, 255, 0.9);
+    -fx-border-color: rgba(156, 163, 175, 0.3);
+}
+
+.app-root.light-theme .data-table {
+    -fx-background-color: rgba(255, 255, 255, 0.95);
+    -fx-border-color: rgba(148, 163, 184, 0.25);
+}
+
+.app-root.light-theme .table-view .column-header-background,
+.app-root.light-theme .table-view .column-header,
+.app-root.light-theme .table-view .filler {
+    -fx-background-color: rgba(229, 231, 235, 0.95);
+}
+
+.app-root.light-theme .table-view .column-header .label {
+    -fx-text-fill: #111827;
+}
+
+.app-root.light-theme .table-row-cell {
+    -fx-background-color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root.light-theme .table-row-cell:filled:selected {
+    -fx-background-color: linear-gradient(to right, rgba(6, 182, 212, 0.8), rgba(37, 99, 235, 0.8));
+}
+
+.app-root.light-theme .button,
+.app-root.light-theme .negative-button {
+    -fx-text-fill: white;
+}
+
+.app-root.light-theme .app-footer {
+    -fx-background-color: rgba(248, 250, 252, 0.95);
+    -fx-border-color: rgba(148, 163, 184, 0.25);
+}
+
+.button {
+    -fx-background-color: linear-gradient(to bottom, #38bdf8, #2563eb);
+    -fx-text-fill: white;
+    -fx-font-weight: 700;
+    -fx-background-radius: 12;
+    -fx-padding: 10 16 10 16;
+    -fx-cursor: hand;
+}
+
+.button:hover {
+    -fx-background-color: linear-gradient(to bottom, #67e8f9, #3b82f6);
+}
+
+.accent-button {
+    -fx-background-color: linear-gradient(to bottom, #10b981, #047857);
+    -fx-text-fill: white;
+    -fx-font-weight: 700;
+    -fx-background-radius: 12;
+    -fx-padding: 10 16 10 16;
+}
+
+.accent-button:hover {
+    -fx-background-color: linear-gradient(to bottom, #34d399, #059669);
+}
+
+.negative-button {
+    -fx-background-color: linear-gradient(to bottom, #ef4444, #b91c1c);
+    -fx-text-fill: white;
+}
+
+.negative-button:hover {
+    -fx-background-color: linear-gradient(to bottom, #f87171, #dc2626);
+}
+
+/* Edit mode button: visually distinct yellow state */
+.button.edit-mode {
+    -fx-background-color: linear-gradient(to bottom, #f5d86a, #f5c542);
+    -fx-text-fill: #1a1a1a;
+    -fx-font-weight: 800;
+}
+
+.button.edit-mode:hover {
+    -fx-background-color: linear-gradient(to bottom, #f7e29b, #f6d25a);
+}
+
+.theme-toggle {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-text-fill: #e2e8f0;
+    -fx-border-color: rgba(148, 163, 184, 0.25);
+    -fx-border-radius: 999;
+    -fx-background-radius: 999;
+    -fx-padding: 8 14;
+}
+
+.theme-toggle:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.15);
+}
+
+.app-root.light-theme .theme-toggle {
+    -fx-background-color: rgba(15, 23, 42, 0.08);
+    -fx-text-fill: #1f2937;
+    -fx-border-color: rgba(107, 114, 128, 0.25);
+}
+
+.control-row {
+    -fx-padding: 8 0 8 0;
+}
+
+.text-field, .text-area, .choice-box {
+    -fx-background-color: rgba(15, 23, 42, 0.85);
+    -fx-control-inner-background: rgba(15, 23, 42, 0.95);
+    -fx-border-color: rgba(148, 163, 184, 0.25);
+    -fx-border-radius: 10;
+    -fx-background-radius: 10;
+}
+
+.text-area {
+    -fx-highlight-fill: #38bdf8;
+}
+
+.status-label {
+    -fx-text-fill: #dbeafe;
+    -fx-font-size: 12px;
+}
+
+.table-hint, .footer-help, .footer-label {
+    -fx-text-fill: #cbd5e1;
+}
+
+.data-table {
+    -fx-background-color: rgba(15, 23, 42, 0.92);
+    -fx-border-color: rgba(148, 163, 184, 0.14);
+    -fx-border-radius: 14;
+    -fx-background-radius: 14;
+}
+
+.table-view .column-header-background {
+    -fx-background-color: rgba(30, 41, 59, 0.95);
+}
+
+.table-view .column-header, .table-view .filler {
+    -fx-size: 38px;
+    -fx-border-color: rgba(148, 163, 184, 0.12);
+    -fx-background-color: transparent;
+}
+
+.table-view .column-header .label {
+    -fx-text-fill: white;
+    -fx-font-weight: 700;
+}
+
+.table-row-cell {
+    -fx-background-color: rgba(15, 23, 42, 0.4);
+    -fx-table-cell-border-color: rgba(148, 163, 184, 0.1);
+}
+
+.table-row-cell:filled:selected {
+    -fx-background-color: linear-gradient(to right, rgba(14, 165, 233, 0.8), rgba(37, 99, 235, 0.8));
+}
+
+.app-footer {
+    -fx-background-color: rgba(15, 23, 42, 0.94);
+    -fx-border-color: rgba(148, 163, 184, 0.14);
+    -fx-border-width: 1 0 0 0;
+}
