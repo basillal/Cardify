@@ -81,6 +81,9 @@ public class MainController {
     private Stage previewStage;
     private WebView previewWebView;
 
+    private VBox howToUsePanel;
+    private TabPane contentTabPane;
+
     private File htmlTemplateFile;
     private File excelFile;
     private List<String> currentHeaders = List.of();
@@ -124,6 +127,10 @@ public class MainController {
         Label subtitle = new Label("Streamline your ID card workflow — from data import to print-ready output.");        subtitle.getStyleClass().add("app-subtitle");
         subtitle.setWrapText(true);
 
+        Hyperlink howToUseLink = new Hyperlink("How to Use");
+        howToUseLink.getStyleClass().add("help-link");
+        howToUseLink.setOnAction(event -> toggleHowToUsePanel());
+
         VBox textBlock = new VBox(6, title, subtitle);
         textBlock.getStyleClass().add("header-block");
 
@@ -133,7 +140,10 @@ public class MainController {
         themeToggle.setOnAction(event -> applyTheme(themeToggle.isSelected()));
         themeToggle.getStyleClass().add("theme-toggle");
 
-        HBox header = new HBox(textBlock, spacer, themeToggle);
+        HBox rightActions = new HBox(12, howToUseLink, themeToggle);
+        rightActions.setAlignment(Pos.CENTER_RIGHT);
+
+        HBox header = new HBox(textBlock, spacer, rightActions);
         header.getStyleClass().add("app-header");
         header.setPadding(new Insets(24, 28, 24, 28));
         header.setAlignment(Pos.CENTER_LEFT);
@@ -165,16 +175,31 @@ public class MainController {
         setupTab.setContent(setupSection);
         setupTab.setClosable(false);
 
-        TabPane tabPane = new TabPane(dataTab, setupTab);
-        tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
-        tabPane.getStyleClass().add("content-tabs");
-        tabPane.tabMinWidthProperty().bind(tabPane.widthProperty().divide(2).subtract(8));
-        tabPane.tabMaxWidthProperty().bind(tabPane.widthProperty().divide(2).subtract(8));
+        contentTabPane = new TabPane(dataTab, setupTab);
+        contentTabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        contentTabPane.getStyleClass().add("content-tabs");
+        contentTabPane.tabMinWidthProperty().bind(contentTabPane.widthProperty().divide(2).subtract(8));
+        contentTabPane.tabMaxWidthProperty().bind(contentTabPane.widthProperty().divide(2).subtract(8));
 
-        VBox wrapper = new VBox(tabPane);
+        Button backButton = new Button("Back");
+        backButton.setOnAction(event -> hideHowToUsePanel());
+        HBox headerRow = new HBox(backButton);
+        headerRow.setAlignment(Pos.CENTER_RIGHT);
+
+        howToUsePanel = new VBox(14,
+            createSectionHeader("How to Use", "Click the underlined text in the top section to show or hide these instructions."),
+            headerRow,
+            buildHowToUsePanel()
+        );
+        howToUsePanel.getStyleClass().add("content-card");
+        howToUsePanel.setFillWidth(true);
+        howToUsePanel.setVisible(false);
+        howToUsePanel.setManaged(false);
+
+        VBox wrapper = new VBox(12, howToUsePanel, contentTabPane);
         wrapper.setPadding(new Insets(24));
         wrapper.setFillWidth(true);
-        VBox.setVgrow(tabPane, Priority.ALWAYS);
+        VBox.setVgrow(contentTabPane, Priority.ALWAYS);
         return wrapper;
     }
 
@@ -258,6 +283,74 @@ public class MainController {
         dangerZone.setExpanded(false);
         dangerZone.setCollapsible(true);
         return dangerZone;
+    }
+
+    private Node buildHowToUsePanel() {
+        VBox panel = new VBox(8);
+        panel.setPadding(new Insets(0, 14, 0, 14));
+        panel.getChildren().addAll(
+                buildHelpStep("1. Upload the HTML template first", "Open Template & Excel and choose your HTML file. Use placeholders like {{name}}, {{department}}, and {{photo}} inside the HTML. The file you upload last becomes the active template."),
+                buildHelpStep("2. Check the placeholder list", "After upload, Cardify scans the HTML and shows the detected placeholders. If you already saved older templates, use the dropdown to switch to one of them."),
+                buildHelpStep("3. Generate the Excel sheet", "Click Download Excel Template. Cardify creates a workbook with the same placeholder names as column headers, so the sheet matches your HTML template."),
+                buildHelpStep("4. Fill the Excel workbook", "Enter one ID card per row. Put normal text in normal fields, use local file paths in image fields, and put QR source text in QR-related columns."),
+                buildHelpStep("5. Import the completed Excel file", "Go to the Data tab and upload the filled workbook. Cardify reads the rows and shows them in the table with a default Pending status."),
+                buildHelpStep("6. Filter and choose rows", "Use the search box to find rows by any column value. Use the status filter to show only Pending, Printing, Printed, or Error rows."),
+                buildHelpStep("7. Preview before printing", "Use Template Preview to see the full template output, or select one row and use Row Preview to test a single card first."),
+                buildHelpStep("8. Print selected rows", "Select one or more rows, choose a printer, and click Print Selected Rows. Cardify renders the HTML, replaces the {{placeholder}} values, and sends the result to the printer."),
+                buildHelpStep("9. Export or manage templates", "Use Export Excel to save the filtered rows, Remove Selected Template to delete one saved template, or the Danger Zone if you want to clear everything after captcha confirmation.")
+        );
+
+            ScrollPane scrollPane = new ScrollPane(panel);
+            scrollPane.setFitToWidth(true);
+            scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+            scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+            scrollPane.setPrefViewportHeight(420);
+            return scrollPane;
+    }
+
+    private void toggleHowToUsePanel() {
+        if (howToUsePanel == null) {
+            return;
+        }
+
+        boolean show = !howToUsePanel.isVisible();
+        howToUsePanel.setVisible(show);
+        howToUsePanel.setManaged(show);
+        if (contentTabPane != null) {
+            contentTabPane.setVisible(!show);
+            contentTabPane.setManaged(!show);
+        }
+    }
+
+    private void hideHowToUsePanel() {
+        if (howToUsePanel == null) {
+            return;
+        }
+
+        howToUsePanel.setVisible(false);
+        howToUsePanel.setManaged(false);
+        if (contentTabPane != null) {
+            contentTabPane.setVisible(true);
+            contentTabPane.setManaged(true);
+        }
+    }
+
+    private Node buildHelpStep(String title, String description) {
+        Label titleLabel = new Label(title);
+        titleLabel.getStyleClass().add("section-title");
+        titleLabel.setStyle("-fx-font-size: 13px;");
+
+        Label descriptionLabel = new Label(description);
+        descriptionLabel.getStyleClass().add("section-description");
+        descriptionLabel.setStyle("-fx-font-size: 11px;");
+        descriptionLabel.setWrapText(true);
+
+        VBox stepCard = new VBox(2, titleLabel, descriptionLabel);
+        stepCard.getStyleClass().add("content-card");
+        stepCard.setFillWidth(true);
+        stepCard.setPadding(new Insets(6, 10, 6, 10));
+        VBox.setMargin(stepCard, new Insets(4, 2, 4, 2));
+        return stepCard;
     }
 
     private Node buildDataControls() {

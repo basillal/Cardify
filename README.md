@@ -2,13 +2,38 @@
 
 Cardify is a JavaFX desktop application for turning an HTML ID-card template into a printable, data-driven workflow.
 
+## How to use
+
+1. Open the app and go to the **Template & Excel** tab first.
+2. Upload your HTML template.
+3. Put placeholders like `{{name}}`, `{{department}}`, and `{{photo}}` inside the HTML where you want data to appear.
+4. Check the detected placeholders list. If you already uploaded older templates, use the dropdown to switch to one of them.
+5. Click **Download Excel Template**. Cardify creates a workbook with the same placeholder names as column headers.
+6. Fill the workbook with one ID card per row.
+7. Use normal text for normal fields, local file paths for image fields, and QR source text for QR-related columns.
+8. Go to the **Data** tab and upload the completed Excel workbook.
+9. Use the search box to find rows by any column value and use the status filter to show only the rows you want.
+10. Select one or more rows and click **Print Selected Rows**.
+11. Use **Template Preview** or **Row Preview** if you want to check the output before printing.
+12. Use **Export Excel** to save filtered rows, **Remove Selected Template** to delete one saved template, or the **Danger Zone** to clear everything after captcha confirmation.
+
 ## What it does
 
-1. Upload an HTML template that contains placeholders like `{{name}}`, `{{department}}`, or `{{photo}}`.
-2. Download an Excel template generated from those placeholders.
-3. Fill the Excel sheet with row data, including local image paths for image fields.
-4. Import the completed workbook into the app.
-5. Select one or more rows and print them to the connected printer.
+Cardify turns an HTML card template into a print-ready workflow:
+
+- uploads HTML templates with placeholders like `{{name}}`, `{{department}}`, or `{{photo}}`
+- generates a matching Excel workbook from those placeholders
+- imports filled Excel rows into a data table
+- previews the template or a single row before printing
+- prints selected rows to the connected printer
+- keeps a history of saved templates so you can switch between them
+
+## Template basics
+
+- Use `{{placeholder_name}}` in the HTML file wherever you want data to appear.
+- If the placeholder value is a local image path, Cardify converts it into a printable image.
+- If the placeholder name looks like a QR field, Cardify generates a QR code image for it.
+- Use `img` tags for photos and QR codes, for example `<img src="{{photo}}" />`.
 
 ## Project structure
 
