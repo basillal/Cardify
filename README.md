@@ -52,13 +52,60 @@ mvn test
 mvn javafx:run
 ```
 
+## Package installers
+
+Build the app and copy runtime dependencies first:
+
+```bash
+mvn clean package dependency:copy-dependencies -DincludeScope=runtime
+```
+
+Ubuntu `.deb`:
+
+```bash
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+$JAVA_HOME/bin/jpackage \
+	--type deb \
+	--input target \
+	--main-jar Cardify-1.0-SNAPSHOT.jar \
+	--main-class org.example.cardify.MainApp \
+	--name Cardify \
+	--app-version 1.0.0 \
+	--vendor "Your Name or Org" \
+	--icon src/main/resources/app-icon.png \
+	--dest installer \
+	--linux-shortcut \
+	--module-path target/dependency \
+	--add-modules javafx.controls,javafx.fxml,javafx.web \
+	--verbose
+```
+
+Windows `.exe`:
+
+```bat
+set JAVA_HOME=C:\Program Files\Java\jdk-17
+%JAVA_HOME%\bin\jpackage ^
+	--type exe ^
+	--input target ^
+	--main-jar Cardify-1.0-SNAPSHOT.jar ^
+	--main-class org.example.cardify.MainApp ^
+	--name Cardify ^
+	--app-version 1.0.0 ^
+	--vendor "Your Name or Org" ^
+	--icon src\main\resources\app-icon.ico ^
+	--dest installer ^
+	--win-shortcut ^
+	--win-menu ^
+	--module-path target\dependency ^
+	--add-modules javafx.controls,javafx.fxml,javafx.web ^
+	--verbose
+```
+
 ## Template format
 
 Use `{{placeholder_name}}` in the HTML file. If a placeholder value points to a local image file, Cardify converts it to a printable data URL before rendering.
 
 QR code fields are also supported. If the placeholder name looks like a QR field, for example `qr_code`, `qr_id`, or `employee_qr`, Cardify renders that value as a QR code image.
-
-If your template contains a QR placeholder, open the **Template & Excel** tab and choose which column should be encoded into that QR placeholder. The dropdown lists all template placeholders, so you can map a QR field like `qr_code` to another column such as `employee_id`.
 
 For image fields, place the placeholder inside an image tag, for example:
 
