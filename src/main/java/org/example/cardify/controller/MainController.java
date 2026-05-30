@@ -32,9 +32,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.Optional;
 import java.util.Map;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class MainController {
     private final Stage stage;
@@ -207,25 +209,26 @@ public class MainController {
         Button updateButton = new Button("Update Selected Template");
         updateButton.setOnAction(event -> updateSelectedTemplate());
 
-        Button deleteButton = new Button("Delete Selected Template");
-        deleteButton.setOnAction(event -> deleteSelectedTemplate());
-
         Button generateButton = new Button("Download Excel Template");
         generateButton.setOnAction(event -> downloadExcelTemplate());
 
         Button templatePreviewButton = new Button("Template Preview");
         templatePreviewButton.setOnAction(event -> showTemplatePreview());
 
-        removeTemplateButton.setOnAction(event -> clearTemplate());
+        removeTemplateButton.setOnAction(event -> deleteSelectedTemplate());
         removeTemplateButton.getStyleClass().add("negative-button");
+        removeTemplateButton.setText("Remove Selected Template");
         removeTemplateButton.setDisable(true);
 
         templateStatus.getStyleClass().add("status-label");
         selectedTemplateLabel.getStyleClass().add("status-label");
         templateChoice.setPrefWidth(360);
+        templateChoice.setPromptText("Latest template is selected by default");
         VBox statusBlock = new VBox(6, new Label("Selected template"), templateChoice, selectedTemplateLabel, templateStatus);
 
-        HBox controls = new HBox(12, uploadButton, updateButton, deleteButton, generateButton, templatePreviewButton, removeTemplateButton, statusBlock);
+        VBox controls = new VBox(12,
+            new HBox(12, uploadButton, updateButton, generateButton, templatePreviewButton, removeTemplateButton),
+            statusBlock);
         controls.setAlignment(Pos.CENTER_LEFT);
         controls.setPadding(new Insets(4, 0, 0, 0));
         controls.getStyleClass().add("control-row");
@@ -237,9 +240,24 @@ public class MainController {
         placeholdersArea.setPrefRowCount(7);
         placeholdersArea.setPromptText("Detected placeholders will appear here");
         Label label = new Label("Detected placeholders");
-        VBox box = new VBox(8, label, placeholdersArea);
+        VBox box = new VBox(8, label, placeholdersArea, buildDangerZone());
         VBox.setVgrow(placeholdersArea, Priority.ALWAYS);
         return box;
+    }
+
+    private Node buildDangerZone() {
+        Button deleteAllButton = new Button("Delete All");
+        deleteAllButton.getStyleClass().add("negative-button");
+        deleteAllButton.setOnAction(event -> deleteAllDataWithCaptcha());
+
+        VBox dangerContent = new VBox(8,
+                new Label("Danger Zone"),
+                new Label("Deletes saved templates, saved Excel data, and imported rows after captcha confirmation."),
+                deleteAllButton);
+        TitledPane dangerZone = new TitledPane("Danger Zone", dangerContent);
+        dangerZone.setExpanded(false);
+        dangerZone.setCollapsible(true);
+        return dangerZone;
     }
 
     private Node buildDataControls() {
@@ -497,6 +515,9 @@ public class MainController {
 
     private void deleteSelectedTemplate() {
         Path selectedTemplate = templateChoice.getValue();
+        if (selectedTemplate == null && htmlTemplateFile != null) {
+            selectedTemplate = htmlTemplateFile.toPath();
+        }
         if (selectedTemplate == null) {
             UiDialog.warn(stage, "No template selected", "Choose a template from the dropdown before deleting it.");
             return;
@@ -534,6 +555,108 @@ public class MainController {
         templateChoice.setValue(null);
         syncingTemplateSelection = false;
         removeTemplateButton.setDisable(true);
+    }
+
+    private void deleteAllDataWithCaptcha() {
+        String captcha = generateCaptchaCode();
+        if (!confirmDeleteAllWithCaptcha(captcha)) {
+            return;
+        }
+
+        List<Path> templateFiles = new ArrayList<>(templateHistory);
+        String savedExcelPath = preferences.getSavedExcelPath();
+        Path activeExcelPath = excelFile == null ? null : excelFile.toPath();
+        List<Path> deletionTargets = new ArrayList<>();
+
+        for (Path templatePath : templateFiles) {
+            Path normalizedTemplatePath = templatePath.toAbsolutePath().normalize();
+            if (deletionTargets.stream().noneMatch(existing -> existing.toAbsolutePath().normalize().equals(normalizedTemplatePath))) {
+                deletionTargets.add(normalizedTemplatePath);
+            }
+        }
+
+        if (savedExcelPath != null && !savedExcelPath.isBlank()) {
+            deletionTargets.add(Path.of(savedExcelPath).toAbsolutePath().normalize());
+        }
+
+        if (activeExcelPath != null) {
+            Path normalizedActiveExcelPath = activeExcelPath.toAbsolutePath().normalize();
+            if (deletionTargets.stream().noneMatch(existing -> existing.toAbsolutePath().normalize().equals(normalizedActiveExcelPath))) {
+                deletionTargets.add(normalizedActiveExcelPath);
+            }
+        }
+
+        int deletedFiles = 0;
+        int skippedFiles = 0;
+
+        for (Path filePath : deletionTargets) {
+            if (deleteFileIfExists(filePath)) {
+                deletedFiles++;
+            } else {
+                skippedFiles++;
+            }
+        }
+
+        templateHistory.clear();
+        preferences.clearSavedTemplatePaths();
+        preferences.clearSavedExcelPath();
+
+        clearImportedDataState();
+        clearCurrentTemplateState();
+
+        UiDialog.info(stage,
+                "Delete All completed",
+                "Deleted " + deletedFiles + " file(s) and skipped " + skippedFiles + " file(s).\nAll saved templates, Excel paths, and imported rows were cleared.");
+    }
+
+    private boolean confirmDeleteAllWithCaptcha(String captcha) {
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle("Delete All Confirmation");
+        dialog.setHeaderText("This will delete saved templates, the saved Excel file, and imported data.");
+        dialog.setContentText("Type this code to confirm: " + captcha);
+
+        Optional<String> response = dialog.showAndWait();
+        return response.map(answer -> captcha.equalsIgnoreCase(answer.trim())).orElse(false);
+    }
+
+    private String generateCaptchaCode() {
+        String alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        StringBuilder code = new StringBuilder(6);
+        for (int index = 0; index < 6; index++) {
+            code.append(alphabet.charAt(ThreadLocalRandom.current().nextInt(alphabet.length())));
+        }
+        return code.toString();
+    }
+
+    private boolean deleteFileIfExists(Path filePath) {
+        if (filePath == null) {
+            return false;
+        }
+        try {
+            return Files.deleteIfExists(filePath);
+        } catch (Exception exception) {
+            return false;
+        }
+    }
+
+    private void clearImportedDataState() {
+        if (editingEnabled) {
+            toggleEditMode();
+        }
+
+        excelFile = null;
+        allRows.clear();
+        currentHeaders = List.of();
+        tableView.getColumns().clear();
+        tableView.setItems(filteredRows);
+        filteredRows.setPredicate(row -> true);
+        selectAllCheckBox.setSelected(false);
+        selectAllCheckBox.setIndeterminate(false);
+        rowCountLabel.setText("0 rows");
+        selectedCountLabel.setText("Selected: 0");
+        excelStatus.setText("No Excel file loaded");
+        clearDataButton.setDisable(true);
+        rowPreviewButton.setDisable(true);
     }
 
     private void loadSavedTemplateHistory() {

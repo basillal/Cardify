@@ -28,6 +28,7 @@ public class AppPreferencesService {
             return Arrays.stream(savedHistory.split("\\R"))
                     .map(String::trim)
                     .filter(path -> !path.isBlank())
+                    .distinct()
                     .toList();
         }
 
@@ -44,8 +45,19 @@ public class AppPreferencesService {
             return;
         }
 
-        PREFS.put(KEY_TEMPLATE_HISTORY, String.join(System.lineSeparator(), templatePaths));
-        PREFS.put(KEY_TEMPLATE_PATH, templatePaths.get(0));
+        List<String> normalizedPaths = templatePaths.stream()
+                .map(String::trim)
+                .filter(path -> !path.isBlank())
+                .distinct()
+                .toList();
+
+        if (normalizedPaths.isEmpty()) {
+            clearSavedTemplatePaths();
+            return;
+        }
+
+        PREFS.put(KEY_TEMPLATE_HISTORY, String.join(System.lineSeparator(), normalizedPaths));
+        PREFS.put(KEY_TEMPLATE_PATH, normalizedPaths.get(0));
     }
 
     public String getSavedExcelPath() {
