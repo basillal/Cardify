@@ -697,15 +697,19 @@ public class MainController {
 
         int deletedFiles = 0;
         int skippedFiles = 0;
+        java.util.Map<Path, String> failures = new java.util.LinkedHashMap<>();
 
         for (Path filePath : deletionTargets) {
-            if (deleteFileIfExists(filePath)) {
+            String err = deleteFileIfExists(filePath);
+            if (err == null) {
                 deletedFiles++;
             } else {
                 skippedFiles++;
+                failures.put(filePath, err);
             }
         }
 
+        // Clear persisted preferences and in-memory lists regardless of file deletion outcome
         templateHistory.clear();
         preferences.clearSavedTemplatePaths();
         preferences.clearSavedExcelPath();
@@ -713,9 +717,18 @@ public class MainController {
         clearImportedDataState();
         clearCurrentTemplateState();
 
-        UiDialog.info(stage,
-                "Delete All completed",
-                "Deleted " + deletedFiles + " file(s) and skipped " + skippedFiles + " file(s).\nAll saved templates, Excel paths, and imported rows were cleared.");
+        StringBuilder message = new StringBuilder();
+        message.append("Deleted ").append(deletedFiles).append(" file(s) and skipped ").append(skippedFiles).append(" file(s).\n");
+        message.append("All saved templates, Excel paths, and imported rows were cleared from the app state.");
+        if (!failures.isEmpty()) {
+            message.append("\n\nFailed to delete the following files (reason):\n");
+            for (java.util.Map.Entry<Path, String> entry : failures.entrySet()) {
+                message.append(entry.getKey().toAbsolutePath()).append(" -> ").append(entry.getValue()).append("\n");
+            }
+            message.append("\nYou may need to delete these files manually or run the app with elevated permissions.");
+        }
+
+        UiDialog.info(stage, "Delete All completed", message.toString());
     }
 
     private boolean confirmDeleteAllWithCaptcha(String captcha) {
@@ -737,14 +750,15 @@ public class MainController {
         return code.toString();
     }
 
-    private boolean deleteFileIfExists(Path filePath) {
+    private String deleteFileIfExists(Path filePath) {
         if (filePath == null) {
-            return false;
+            return "Path was null";
         }
         try {
-            return Files.deleteIfExists(filePath);
+            boolean deleted = Files.deleteIfExists(filePath);
+            return deleted ? null : "File did not exist";
         } catch (Exception exception) {
-            return false;
+            return exception.getClass().getSimpleName() + ": " + exception.getMessage();
         }
     }
 
