@@ -462,9 +462,7 @@ public class MainController {
     public void refreshPrinters() {
         List<String> printers = printerService.listPrinterNames();
         String currentSelection = printerChoice.getValue();
-        String systemDefaultPrinter = Optional.ofNullable(javafx.print.Printer.getDefaultPrinter())
-                .map(javafx.print.Printer::getName)
-                .orElse(null);
+        String systemDefaultPrinter = printerService.getDefaultPrinterName();
 
         printerChoice.getItems().setAll(printers);
 
