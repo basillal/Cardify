@@ -461,10 +461,28 @@ public class MainController {
 
     public void refreshPrinters() {
         List<String> printers = printerService.listPrinterNames();
+        String currentSelection = printerChoice.getValue();
+        String systemDefaultPrinter = Optional.ofNullable(javafx.print.Printer.getDefaultPrinter())
+                .map(javafx.print.Printer::getName)
+                .orElse(null);
+
         printerChoice.getItems().setAll(printers);
-        if (!printers.isEmpty() && printerChoice.getValue() == null) {
-            printerChoice.setValue(printers.get(0));
+
+        if (currentSelection != null && printers.contains(currentSelection)) {
+            printerChoice.setValue(currentSelection);
+            return;
         }
+
+        if (systemDefaultPrinter != null && printers.contains(systemDefaultPrinter)) {
+            printerChoice.setValue(systemDefaultPrinter);
+            return;
+        }
+
+        if (!printers.isEmpty()) {
+            printerChoice.setValue(printers.get(0));
+            return;
+        }
+
         if (printers.isEmpty()) {
             printerChoice.setValue(null);
         }
@@ -1033,6 +1051,9 @@ public class MainController {
             UiDialog.warn(stage, "Missing template", "Upload an HTML template before printing.");
             return;
         }
+
+        refreshPrinters();
+
         List<SpreadsheetRow> selectedRows = new ArrayList<>(filteredRows.stream().filter(SpreadsheetRow::isSelected).toList());
         if (selectedRows.isEmpty()) {
             UiDialog.warn(stage, "Nothing selected", "Select one or more rows to print.");
@@ -1045,9 +1066,18 @@ public class MainController {
             return;
         }
 
-        String htmlTemplate = htmlTemplateService.readTemplate(htmlTemplateFile.toPath());
-        printerService.printRows(printerName, htmlTemplate, selectedRows, getQrMappings());
-        UiDialog.info(stage, "Print job started", "Sent " + selectedRows.size() + " row(s) to " + printerName + ".");
+        if (!printerChoice.getItems().contains(printerName)) {
+            UiDialog.warn(stage, "Printer unavailable", "The selected printer is no longer available. Please choose another printer and try again.");
+            return;
+        }
+
+        try {
+            String htmlTemplate = htmlTemplateService.readTemplate(htmlTemplateFile.toPath());
+            printerService.printRows(printerName, htmlTemplate, selectedRows, getQrMappings());
+            UiDialog.info(stage, "Print job started", "Sent " + selectedRows.size() + " row(s) to " + printerName + ". Track row status for completion.");
+        } catch (RuntimeException exception) {
+            UiDialog.error(stage, "Print failed", "Unable to start printing: " + exception.getMessage());
+        }
     }
 
     // QR mapping UI removed: always return no mappings.

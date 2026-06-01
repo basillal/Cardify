@@ -43,20 +43,31 @@ public class HtmlTemplateService {
             if (isQrPlaceholder(entry.getKey())) {
                 String sourceKey = mapping.getOrDefault(entry.getKey(), entry.getKey());
                 String sourceValue = values.getOrDefault(sourceKey, value);
-                resolvedValues.put(entry.getKey(), ImageDataUrlConverter.toQrCodeDataUrl(sourceValue == null ? "" : sourceValue.trim()));
+                try {
+                    resolvedValues.put(entry.getKey(), ImageDataUrlConverter.toQrCodeDataUrl(sourceValue == null ? "" : sourceValue.trim()));
+                } catch (RuntimeException exception) {
+                    resolvedValues.put(entry.getKey(), "");
+                }
             } else if (ImageDataUrlConverter.looksLikeImagePath(normalized)) {
-                resolvedValues.put(entry.getKey(), ImageDataUrlConverter.toDataUrl(Path.of(normalized)));
+                try {
+                    resolvedValues.put(entry.getKey(), ImageDataUrlConverter.toDataUrl(Path.of(normalized)));
+                } catch (RuntimeException exception) {
+                    resolvedValues.put(entry.getKey(), escapeHtml(value));
+                }
             } else {
                 resolvedValues.put(entry.getKey(), escapeHtml(value));
             }
         }
 
-        String rendered = template;
-        for (Map.Entry<String, String> entry : resolvedValues.entrySet()) {
-            rendered = rendered.replace("{{" + entry.getKey() + "}}", entry.getValue());
-            rendered = rendered.replace("{{ " + entry.getKey() + " }}", entry.getValue());
+        Matcher matcher = PLACEHOLDER_PATTERN.matcher(template);
+        StringBuffer rendered = new StringBuffer();
+        while (matcher.find()) {
+            String key = matcher.group(1).trim();
+            String replacement = resolvedValues.getOrDefault(key, "");
+            matcher.appendReplacement(rendered, Matcher.quoteReplacement(replacement));
         }
-        return rendered;
+        matcher.appendTail(rendered);
+        return rendered.toString();
     }
 
     public Set<String> findPlaceholders(String template) {

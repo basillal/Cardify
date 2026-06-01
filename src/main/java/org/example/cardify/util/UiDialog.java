@@ -16,6 +16,10 @@ public final class UiDialog {
         show(owner, Alert.AlertType.WARNING, title, message);
     }
 
+    public static void error(Window owner, String title, String message) {
+        show(owner, Alert.AlertType.ERROR, title, message);
+    }
+
     public static boolean confirm(Window owner, String title, String message) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION, message, ButtonType.YES, ButtonType.CANCEL);
         alert.initOwner(owner);
