@@ -76,7 +76,7 @@ $JAVA_HOME/bin/jpackage \
 	--dest installer \
 	--linux-shortcut \
 	--module-path target/dependency \
-	--add-modules javafx.controls,javafx.fxml,javafx.web \
+	--add-modules javafx.controls,javafx.fxml,javafx.web,java.desktop \
 	--verbose
 ```
 
@@ -97,7 +97,7 @@ set JAVA_HOME=C:\Program Files\Java\jdk-17
 	--win-shortcut ^
 	--win-menu ^
 	--module-path target\dependency ^
-	--add-modules javafx.controls,javafx.fxml,javafx.web ^
+	--add-modules javafx.controls,javafx.fxml,javafx.web,java.desktop ^
 	--verbose
 ```
 

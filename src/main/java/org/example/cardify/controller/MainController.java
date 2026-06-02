@@ -58,6 +58,7 @@ public class MainController {
     private final Label selectedCountLabel = new Label("Selected: 0");
     private final CheckBox selectAllCheckBox = new CheckBox();
     private final ChoiceBox<String> printerChoice = new ChoiceBox<>();
+    private final Label printerAdviceLabel = new Label();
     private final TextField searchField = new TextField();
     private final ChoiceBox<String> statusFilter = new ChoiceBox<>();
     private final ToggleButton themeToggle = new ToggleButton("Light");
@@ -214,16 +215,25 @@ public class MainController {
 
         printerChoice.getStyleClass().add("printer-choice");
         printerChoice.setPrefWidth(320);
+        printerChoice.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> updatePrinterAdvice());
 
         Button refreshPrintersButton = new Button("Refresh Printers");
         refreshPrintersButton.setOnAction(event -> refreshPrinters());
+        Button diagnosticsButton = new Button("Show Diagnostics");
+        diagnosticsButton.setOnAction(evt -> showDiagnosticsDialog());
+
+        printerAdviceLabel.getStyleClass().add("printer-advice");
+        printerAdviceLabel.setWrapText(true);
+        printerAdviceLabel.setMaxWidth(300);
+        printerAdviceLabel.setText("Select a real printer for actual print jobs; Microsoft Print to PDF saves files instead.");
 
         Label help = new Label("Image fields should point to local image files; they will be converted to printable HTML data URLs during rendering.");
         help.getStyleClass().add("footer-help");
         help.setWrapText(true);
         HBox.setHgrow(help, Priority.ALWAYS);
 
-        footer.getChildren().addAll(printerLabel, printerChoice, refreshPrintersButton, help);
+        VBox printerBlock = new VBox(4, new HBox(8, printerLabel, printerChoice, refreshPrintersButton, diagnosticsButton), printerAdviceLabel);
+        footer.getChildren().addAll(printerBlock, help);
         return footer;
     }
 
@@ -468,21 +478,37 @@ public class MainController {
 
         if (currentSelection != null && printers.contains(currentSelection)) {
             printerChoice.setValue(currentSelection);
+            updatePrinterAdvice();
             return;
         }
 
         if (systemDefaultPrinter != null && printers.contains(systemDefaultPrinter)) {
             printerChoice.setValue(systemDefaultPrinter);
+            updatePrinterAdvice();
             return;
         }
 
         if (!printers.isEmpty()) {
             printerChoice.setValue(printers.get(0));
+            updatePrinterAdvice();
             return;
         }
 
-        if (printers.isEmpty()) {
-            printerChoice.setValue(null);
+        printerChoice.setValue(null);
+        updatePrinterAdvice();
+    }
+
+    private void updatePrinterAdvice() {
+        String selectedPrinter = printerChoice.getValue();
+        if (selectedPrinter == null) {
+            printerAdviceLabel.setText("No printer selected. Please refresh printers or install a printer driver.");
+            return;
+        }
+
+        if (printerService.isVirtualPdfPrinter(selectedPrinter)) {
+            printerAdviceLabel.setText("Selected printer is a PDF printer. Cardify will save output to Documents\\Cardify PDF Output instead of sending a print job.");
+        } else {
+            printerAdviceLabel.setText("Selected printer should submit a real print job. Make sure the printer is powered on and connected.");
         }
     }
 
@@ -555,6 +581,24 @@ public class MainController {
             updateSelectedCount();
             syncingSelection = false;
         });
+        row.statusProperty().addListener((obs, oldV, newV) -> {
+            if ("Error".equalsIgnoreCase(newV)) {
+                // show diagnostics so the user can see the log immediately
+                showDiagnosticsDialog();
+            }
+        });
+    }
+
+    private void showDiagnosticsDialog() {
+        java.nio.file.Path logPath = java.nio.file.Path.of(System.getenv("APPDATA") == null ? System.getProperty("user.home") : System.getenv("APPDATA"), "Cardify", "logs", "print.log");
+        String content = null;
+        try {
+            if (java.nio.file.Files.exists(logPath)) {
+                content = java.nio.file.Files.lines(logPath).collect(java.util.stream.Collectors.joining(System.lineSeparator()));
+            }
+        } catch (Exception ignored) {
+        }
+        UiDialog.showDiagnostics(stage, content);
     }
 
     private void updateSelectedCount() {
@@ -1084,9 +1128,10 @@ public class MainController {
         }
 
         try {
-            String htmlTemplate = htmlTemplateService.readTemplate(htmlTemplateFile.toPath());
-            printerService.printRows(printerName, htmlTemplate, selectedRows, getQrMappings());
-            UiDialog.info(stage, "Print job started", "Sent " + selectedRows.size() + " row(s) to " + printerName + ". Track row status for completion.");
+            Path templatePath = htmlTemplateFile.toPath();
+            String htmlTemplate = htmlTemplateService.readTemplate(templatePath);
+            printerService.printCards(printerName, htmlTemplate, selectedRows, getQrMappings(), templatePath);
+            UiDialog.info(stage, "Print job started", "Sent " + selectedRows.size() + " card(s) to " + printerName + ". Track row status for completion.");
         } catch (RuntimeException exception) {
             UiDialog.error(stage, "Print failed", "Unable to start printing: " + exception.getMessage());
         }
