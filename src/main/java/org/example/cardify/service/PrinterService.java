@@ -333,11 +333,6 @@ public class PrinterService {
         try {
             Path tempFile = Files.createTempFile("cardify-print-", ".pdf");
             String rendered = addPdfPageStyles(html == null ? "" : html);
-            // Save rendered HTML alongside the temp PDF for debugging
-            try {
-                Files.writeString(Path.of(tempFile.toString() + ".html"), rendered, StandardCharsets.UTF_8);
-            } catch (IOException ignored) {
-            }
 
             PdfRendererBuilder builder = new PdfRendererBuilder();
             builder.withHtmlContent(rendered, baseUri);
@@ -346,27 +341,55 @@ public class PrinterService {
                 try {
                     builder.run();
                 } catch (Exception renderEx) {
-                    throw new IllegalStateException("PDF rendering failed; debug HTML saved at: " + tempFile + ".html", renderEx);
+                    throw new IllegalStateException("PDF rendering failed", renderEx);
                 }
             }
 
             // Emit debug info to stdout for easier reproduction
             System.out.println("PrinterService: generated PDF -> " + tempFile.toAbsolutePath());
-            System.out.println("PrinterService: debug HTML -> " + Path.of(tempFile.toString() + ".html").toAbsolutePath());
 
             try {
                 long size = Files.size(tempFile);
                 if (size <= 0L) {
-                    throw new IllegalStateException("Generated PDF is empty; debug HTML saved at: " + tempFile + ".html");
+                    throw new IllegalStateException("Generated PDF is empty (0 bytes)");
+                }
+                // Verify the file actually starts with the PDF magic bytes (%PDF-)
+                byte[] magic = new byte[5];
+                try (var in = Files.newInputStream(tempFile)) {
+                    int read = in.read(magic);
+                    if (read < 5 || magic[0] != '%' || magic[1] != 'P' || magic[2] != 'D' || magic[3] != 'F' || magic[4] != '-') {
+                        // Save debug HTML to logs dir for investigation before throwing
+                        saveDebugHtml(rendered, tempFile.getFileName().toString());
+                        throw new IllegalStateException("Generated file is not a valid PDF (missing %%PDF- header); check Cardify logs for debug HTML");
+                    }
                 }
             } catch (IOException ioe) {
-                // If we can't measure size, surface an informative error
-                throw new IllegalStateException("Unable to verify generated PDF; debug HTML saved at: " + tempFile + ".html", ioe);
+                throw new IllegalStateException("Unable to verify generated PDF", ioe);
             }
 
             return tempFile;
         } catch (Exception exception) {
             throw new IllegalStateException("Unable to create PDF output", exception);
+        }
+    }
+
+    /**
+     * Saves the rendered HTML to the Cardify logs directory for debugging when PDF generation fails.
+     * Using the logs directory (not temp) avoids leaving confusingly-named files in %TEMP%.
+     */
+    private void saveDebugHtml(String html, String sourceName) {
+        try {
+            String base = System.getenv("APPDATA");
+            if (base == null || base.isBlank()) {
+                base = System.getProperty("user.home");
+            }
+            Path dir = Path.of(base, "Cardify", "logs");
+            Files.createDirectories(dir);
+            Path debugFile = dir.resolve("debug-" + sourceName + ".html");
+            Files.writeString(debugFile, html == null ? "" : html, StandardCharsets.UTF_8);
+            appendLog("saveDebugHtml: debug HTML written to " + debugFile.toAbsolutePath());
+            System.out.println("PrinterService: debug HTML -> " + debugFile.toAbsolutePath());
+        } catch (Exception ignored) {
         }
     }
 
@@ -379,14 +402,24 @@ public class PrinterService {
         boolean keep = "true".equalsIgnoreCase(System.getProperty("cardify.debug.keep", "false"));
         if (keep) {
             System.out.println("PrinterService: keeping PDF for debugging -> " + tempPdf.toAbsolutePath());
-            System.out.println("PrinterService: keeping debug HTML -> " + Path.of(tempPdf.toString() + ".html").toAbsolutePath());
             return;
         }
 
+        // Delete the temp PDF file
         try {
             Files.deleteIfExists(tempPdf);
         } catch (IOException ignored) {
             tempPdf.toFile().deleteOnExit();
+        }
+
+        // Also clean up any stale .pdf.html debug files with the same base name that may
+        // have been left by a previous version of the app. These files confuse users
+        // because Windows Explorer hides extensions and shows "name.pdf.html" as "name.pdf".
+        Path legacyDebugHtml = Path.of(tempPdf.toString() + ".html");
+        try {
+            Files.deleteIfExists(legacyDebugHtml);
+        } catch (IOException ignored) {
+            legacyDebugHtml.toFile().deleteOnExit();
         }
     }
 
