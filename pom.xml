@@ -89,6 +89,15 @@
 
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+                <configuration>
+                    <release>17</release>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
                 <configuration>
                     <archive>
@@ -100,6 +109,39 @@
                     </archive>
                 </configuration>
             </plugin>
+
+            <!--
+                Copy all runtime dependency JARs into target/dependency/.
+                This is required so that:
+                  1. The fat-jar classpath (dependency/*.jar) resolves correctly when running
+                     the plain JAR outside Maven.
+                  2. jpackage can locate all JARs via  -/-module-path target/dependency
+                     to bundle them into the native application image.
+                Without this step the packaged .exe is missing openhtmltopdf, PDFBox,
+                and other printing libraries — causing the print thread to fail silently
+                with NoClassDefFoundError.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.6.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-dependencies</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/dependency</outputDirectory>
+                            <includeScope>runtime</includeScope>
+                            <overWriteReleases>false</overWriteReleases>
+                            <overWriteSnapshots>true</overWriteSnapshots>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
+
 </project>

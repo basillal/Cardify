@@ -16,7 +16,7 @@
     -fx-border-width: 0 0 1 0;
 }
 
-.app-root.light-theme .app-header {
+.light-theme .app-header {
     -fx-background-color: rgba(255, 255, 255, 0.9);
     -fx-border-color: rgba(107, 114, 128, 0.18);
 }
@@ -132,43 +132,43 @@
     -fx-text-fill: #e2e8f0;
 }
 
-.app-root.dark-theme .text-field,
-.app-root.dark-theme .text-area,
-.app-root.dark-theme .choice-box {
+.dark-theme .text-field,
+.dark-theme .text-area,
+.dark-theme .choice-box {
     -fx-prompt-text-fill: rgba(255, 255, 255, 0.7);
 }
 
-.app-root.light-theme .label,
-.app-root.light-theme .text-field,
-.app-root.light-theme .text-area,
-.app-root.light-theme .choice-box {
+.light-theme .label,
+.light-theme .text-field,
+.light-theme .text-area,
+.light-theme .choice-box {
     -fx-text-fill: #1f2937;
 }
 
 /* Light theme: make input controls have light backgrounds */
-.app-root.light-theme .text-field,
-.app-root.light-theme .text-area,
-.app-root.light-theme .choice-box {
+.light-theme .text-field,
+.light-theme .text-area,
+.light-theme .choice-box {
     -fx-background-color: rgba(255, 255, 255, 0.95);
     -fx-control-inner-background: white;
     -fx-border-color: rgba(156, 163, 175, 0.35);
 }
 
 /* Light theme: tab and tabs area background */
-.app-root.light-theme .content-tabs .tab-header-area {
+.light-theme .content-tabs .tab-header-area {
     -fx-background-color: rgba(255, 255, 255, 0.95);
     -fx-padding: 0 0 8 0;
 }
 
-.app-root.light-theme .content-tabs .tab-header-background,
-.app-root.light-theme .content-tabs .headers-region,
-.app-root.light-theme .content-tabs .tab-content-area,
-.app-root.light-theme .content-tabs .tab-pane,
-.app-root.light-theme .content-tabs .tab-pane .content {
+.light-theme .content-tabs .tab-header-background,
+.light-theme .content-tabs .headers-region,
+.light-theme .content-tabs .tab-content-area,
+.light-theme .content-tabs .tab-pane,
+.light-theme .content-tabs .tab-pane .content {
     -fx-background-color: transparent;
 }
 
-.app-root.light-theme .content-tabs .tab {
+.light-theme .content-tabs .tab {
     -fx-background-color: rgba(255, 255, 255, 0.9);
     -fx-border-color: rgba(156, 163, 175, 0.25);
     -fx-background-radius: 16 16 0 0;
@@ -176,71 +176,71 @@
     -fx-padding: 10 14;
 }
 
-.app-root.light-theme .content-tabs .tab-label {
+.light-theme .content-tabs .tab-label {
     -fx-text-fill: #374151;
 }
 
 /* Make selected tab in light theme match dark-theme blue styling */
-.app-root.light-theme .content-tabs .tab:selected {
+.light-theme .content-tabs .tab:selected {
     -fx-background-color: linear-gradient(to bottom, rgba(56, 189, 248, 0.95), rgba(37, 99, 235, 0.95));
 }
 
-.app-root.light-theme .content-tabs .tab:selected .tab-label {
+.light-theme .content-tabs .tab:selected .tab-label {
     -fx-text-fill: white;
 }
 
 /* Dark theme: ensure table row text is light-colored */
-.app-root.dark-theme .table-row-cell,
-.app-root.dark-theme .table-view .cell {
+.dark-theme .table-row-cell,
+.dark-theme .table-view .cell {
     -fx-text-fill: #f8fafc;
 }
 
-.app-root.light-theme .section-title {
+.light-theme .section-title {
     -fx-text-fill: #111827;
 }
 
-.app-root.light-theme .section-description,
-.app-root.light-theme .table-hint,
-.app-root.light-theme .footer-help,
-.app-root.light-theme .footer-label,
-.app-root.light-theme .status-label {
+.light-theme .section-description,
+.light-theme .table-hint,
+.light-theme .footer-help,
+.light-theme .footer-label,
+.light-theme .status-label {
     -fx-text-fill: #4b5563;
 }
 
-.app-root.light-theme .content-card {
+.light-theme .content-card {
     -fx-background-color: rgba(255, 255, 255, 0.9);
     -fx-border-color: rgba(156, 163, 175, 0.3);
 }
 
-.app-root.light-theme .data-table {
+.light-theme .data-table {
     -fx-background-color: rgba(255, 255, 255, 0.95);
     -fx-border-color: rgba(148, 163, 184, 0.25);
 }
 
-.app-root.light-theme .table-view .column-header-background,
-.app-root.light-theme .table-view .column-header,
-.app-root.light-theme .table-view .filler {
+.light-theme .table-view .column-header-background,
+.light-theme .table-view .column-header,
+.light-theme .table-view .filler {
     -fx-background-color: rgba(229, 231, 235, 0.95);
 }
 
-.app-root.light-theme .table-view .column-header .label {
+.light-theme .table-view .column-header .label {
     -fx-text-fill: #111827;
 }
 
-.app-root.light-theme .table-row-cell {
+.light-theme .table-row-cell {
     -fx-background-color: rgba(255, 255, 255, 0.95);
 }
 
-.app-root.light-theme .table-row-cell:filled:selected {
+.light-theme .table-row-cell:filled:selected {
     -fx-background-color: linear-gradient(to right, rgba(6, 182, 212, 0.8), rgba(37, 99, 235, 0.8));
 }
 
-.app-root.light-theme .button,
-.app-root.light-theme .negative-button {
+.light-theme .button,
+.light-theme .negative-button {
     -fx-text-fill: white;
 }
 
-.app-root.light-theme .app-footer {
+.light-theme .app-footer {
     -fx-background-color: rgba(248, 250, 252, 0.95);
     -fx-border-color: rgba(148, 163, 184, 0.25);
 }
@@ -303,7 +303,7 @@
     -fx-background-color: rgba(255, 255, 255, 0.15);
 }
 
-.app-root.light-theme .theme-toggle {
+.light-theme .theme-toggle {
     -fx-background-color: rgba(15, 23, 42, 0.08);
     -fx-text-fill: #1f2937;
     -fx-border-color: rgba(107, 114, 128, 0.25);
@@ -369,4 +369,16 @@
     -fx-background-color: rgba(15, 23, 42, 0.94);
     -fx-border-color: rgba(148, 163, 184, 0.14);
     -fx-border-width: 1 0 0 0;
+}
+
+/* Light theme dialog styling */
+.light-theme.dialog-pane,
+.light-theme .dialog-pane {
+    -fx-background-color: #f3f4f6;
+    -fx-border-color: rgba(156, 163, 175, 0.3);
+}
+
+.light-theme.dialog-pane .label,
+.light-theme .dialog-pane .label {
+    -fx-text-fill: #1f2937;
 }

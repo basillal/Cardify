@@ -287,7 +287,7 @@ public class MainController {
 
         VBox dangerContent = new VBox(8,
                 new Label("Danger Zone"),
-                new Label("Deletes saved templates, saved Excel data, and imported rows after captcha confirmation."),
+                new Label("Removes saved templates, Excel paths, and imported rows from the application (actual files are not deleted from your system)."),
                 deleteAllButton);
         TitledPane dangerZone = new TitledPane("Danger Zone", dangerContent);
         dangerZone.setExpanded(false);
@@ -716,44 +716,7 @@ public class MainController {
             return;
         }
 
-        List<Path> templateFiles = new ArrayList<>(templateHistory);
-        String savedExcelPath = preferences.getSavedExcelPath();
-        Path activeExcelPath = excelFile == null ? null : excelFile.toPath();
-        List<Path> deletionTargets = new ArrayList<>();
-
-        for (Path templatePath : templateFiles) {
-            Path normalizedTemplatePath = templatePath.toAbsolutePath().normalize();
-            if (deletionTargets.stream().noneMatch(existing -> existing.toAbsolutePath().normalize().equals(normalizedTemplatePath))) {
-                deletionTargets.add(normalizedTemplatePath);
-            }
-        }
-
-        if (savedExcelPath != null && !savedExcelPath.isBlank()) {
-            deletionTargets.add(Path.of(savedExcelPath).toAbsolutePath().normalize());
-        }
-
-        if (activeExcelPath != null) {
-            Path normalizedActiveExcelPath = activeExcelPath.toAbsolutePath().normalize();
-            if (deletionTargets.stream().noneMatch(existing -> existing.toAbsolutePath().normalize().equals(normalizedActiveExcelPath))) {
-                deletionTargets.add(normalizedActiveExcelPath);
-            }
-        }
-
-        int deletedFiles = 0;
-        int skippedFiles = 0;
-        java.util.Map<Path, String> failures = new java.util.LinkedHashMap<>();
-
-        for (Path filePath : deletionTargets) {
-            String err = deleteFileIfExists(filePath);
-            if (err == null) {
-                deletedFiles++;
-            } else {
-                skippedFiles++;
-                failures.put(filePath, err);
-            }
-        }
-
-        // Clear persisted preferences and in-memory lists regardless of file deletion outcome
+        // Clear persisted preferences and in-memory lists
         templateHistory.clear();
         preferences.clearSavedTemplatePaths();
         preferences.clearSavedExcelPath();
@@ -761,25 +724,25 @@ public class MainController {
         clearImportedDataState();
         clearCurrentTemplateState();
 
-        StringBuilder message = new StringBuilder();
-        message.append("Deleted ").append(deletedFiles).append(" file(s) and skipped ").append(skippedFiles).append(" file(s).\n");
-        message.append("All saved templates, Excel paths, and imported rows were cleared from the app state.");
-        if (!failures.isEmpty()) {
-            message.append("\n\nFailed to delete the following files (reason):\n");
-            for (java.util.Map.Entry<Path, String> entry : failures.entrySet()) {
-                message.append(entry.getKey().toAbsolutePath()).append(" -> ").append(entry.getValue()).append("\n");
-            }
-            message.append("\nYou may need to delete these files manually or run the app with elevated permissions.");
-        }
+        String message = "All saved templates, Excel paths, and imported rows were successfully cleared from the application state.\n" +
+                         "Please note: The actual files on your system were not deleted.";
 
-        UiDialog.info(stage, "Delete All completed", message.toString());
+        UiDialog.info(stage, "Delete All completed", message);
     }
 
     private boolean confirmDeleteAllWithCaptcha(String captcha) {
         TextInputDialog dialog = new TextInputDialog();
+        dialog.initOwner(stage);
         dialog.setTitle("Delete All Confirmation");
-        dialog.setHeaderText("This will delete saved templates, the saved Excel file, and imported data.");
+        dialog.setHeaderText("This will remove saved templates, the saved Excel path, and imported data from the application.");
         dialog.setContentText("Type this code to confirm: " + captcha);
+
+        if (stage != null && stage.getScene() != null) {
+            dialog.getDialogPane().getStylesheets().setAll(stage.getScene().getStylesheets());
+            boolean isLight = root.getStyleClass().contains("light-theme");
+            dialog.getDialogPane().getStyleClass().removeAll("dark-theme", "light-theme");
+            dialog.getDialogPane().getStyleClass().add(isLight ? "light-theme" : "dark-theme");
+        }
 
         Optional<String> response = dialog.showAndWait();
         return response.map(answer -> captcha.equalsIgnoreCase(answer.trim())).orElse(false);
@@ -792,18 +755,6 @@ public class MainController {
             code.append(alphabet.charAt(ThreadLocalRandom.current().nextInt(alphabet.length())));
         }
         return code.toString();
-    }
-
-    private String deleteFileIfExists(Path filePath) {
-        if (filePath == null) {
-            return "Path was null";
-        }
-        try {
-            boolean deleted = Files.deleteIfExists(filePath);
-            return deleted ? null : "File did not exist";
-        } catch (Exception exception) {
-            return exception.getClass().getSimpleName() + ": " + exception.getMessage();
-        }
     }
 
     private void clearImportedDataState() {

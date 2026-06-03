@@ -25,6 +25,7 @@ public final class UiDialog {
         alert.initOwner(owner);
         alert.setTitle(title);
         alert.setHeaderText(null);
+        styleDialog(alert, owner);
         return alert.showAndWait().filter(ButtonType.YES::equals).isPresent();
     }
 
@@ -33,6 +34,7 @@ public final class UiDialog {
         alert.initOwner(owner);
         alert.setTitle("Print Diagnostics");
         alert.setHeaderText("Recent print log");
+        styleDialog(alert, owner);
 
         javafx.scene.control.TextArea area = new javafx.scene.control.TextArea(logContent == null ? "(no log found)" : logContent);
         area.setEditable(false);
@@ -50,6 +52,23 @@ public final class UiDialog {
         alert.initOwner(owner);
         alert.setTitle(title);
         alert.setHeaderText(null);
+        styleDialog(alert, owner);
         alert.showAndWait();
+    }
+
+    private static void styleDialog(Alert alert, Window owner) {
+        if (owner != null && owner.getScene() != null) {
+            alert.getDialogPane().getStylesheets().setAll(owner.getScene().getStylesheets());
+            boolean isLight = owner.getScene().getRoot().getStyleClass().contains("light-theme");
+            alert.getDialogPane().getStyleClass().removeAll("dark-theme", "light-theme");
+            alert.getDialogPane().getStyleClass().add(isLight ? "light-theme" : "dark-theme");
+        } else {
+            try {
+                String css = UiDialog.class.getResource("/org/example/cardify/styles/app.css").toExternalForm();
+                alert.getDialogPane().getStylesheets().add(css);
+                alert.getDialogPane().getStyleClass().add("dark-theme");
+            } catch (Exception ignored) {
+            }
+        }
     }
 }

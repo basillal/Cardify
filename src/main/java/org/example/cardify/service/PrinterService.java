@@ -90,8 +90,12 @@ public class PrinterService {
                 try {
                     printSingleCard(printerName, htmlTemplate, row, qrMappings, templatePath);
                     Platform.runLater(() -> row.setStatus("Printed"));
-                } catch (RuntimeException exception) {
-                    appendLog("PrinterService: failed to print card for printer '" + printerName + "': " + exception.getMessage());
+                } catch (Throwable exception) {
+                    // Catch Throwable (not just RuntimeException) to ensure JVM Errors such as
+                    // NoClassDefFoundError — which occur when required modules are absent from the
+                    // jpackage runtime image — are logged and surfaced instead of silently dying.
+                    appendLog("PrinterService: failed to print card for printer '" + printerName + "': "
+                            + exception.getClass().getName() + ": " + exception.getMessage());
                     appendStackTrace(exception);
                     Platform.runLater(() -> row.setStatus("Error"));
                 }
