@@ -72,7 +72,8 @@ public class MainController {
     private final Button rowPreviewButton = new Button("Row Preview");
     private final Button exportExcelButton = new Button("Download Excel");
     private final Button editButton = new Button("Edit Rows");
-    private final ComboBox<Path> templateChoice = new ComboBox<>();
+    private final ListView<Path> templateChoice = new ListView<>();
+    private final ComboBox<Path> dataTabTemplateChoice = new ComboBox<>();
     private final ObservableList<Path> templateHistory = FXCollections.observableArrayList();
     private final Label selectedTemplateLabel = new Label("No template selected");
     private final ObservableList<String> templatePlaceholders = FXCollections.observableArrayList();
@@ -254,14 +255,67 @@ public class MainController {
         content.setPadding(new Insets(20));
         content.setFillWidth(true);
 
-        // ─ Section 1 : HTML Template & Page Size ─────────────────────────────────
+        // ─ Left side : Upload & Template List ─────────────────────────────────
+        Button uploadButton = new Button("Upload New HTML Template");
+        uploadButton.setOnAction(event -> uploadTemplate());
+        uploadButton.getStyleClass().add("primary-button");
+        uploadButton.setMaxWidth(Double.MAX_VALUE);
+
+        templateChoice.setPrefHeight(250);
+        VBox leftSide = new VBox(10, uploadButton, new Label("Saved Templates:"), templateChoice);
+        leftSide.setPrefWidth(280);
+        leftSide.setMinWidth(280);
+
+        // ─ Right side : Template Details & Actions ────────────────────────────
+        VBox rightSide = new VBox(16);
+        rightSide.setPadding(new Insets(0, 0, 0, 20));
+
+        templateStatus.getStyleClass().add("status-label");
+        selectedTemplateLabel.getStyleClass().add("status-label");
+        VBox statusBlock = new VBox(4, selectedTemplateLabel, templateStatus);
+
+        Button updateButton = new Button("Update Template");
+        updateButton.setOnAction(event -> updateSelectedTemplate());
+        
+        Button renameButton = new Button("Rename");
+        renameButton.setOnAction(event -> renameSelectedTemplate());
+        
+        Button generateButton = new Button("Download Excel");
+        generateButton.setOnAction(event -> downloadExcelTemplate());
+        
+        Button templatePreviewButton = new Button("Preview");
+        templatePreviewButton.setOnAction(event -> showTemplatePreview());
+        
+        removeTemplateButton.setOnAction(event -> deleteSelectedTemplate());
+        removeTemplateButton.getStyleClass().add("negative-button");
+        removeTemplateButton.setText("Remove");
+        // Disable is handled by selection listeners, but we keep it default disabled
+        removeTemplateButton.setDisable(true);
+
+        HBox actionsRow = new HBox(8, updateButton, renameButton, generateButton, templatePreviewButton, removeTemplateButton);
+        actionsRow.setAlignment(Pos.CENTER_LEFT);
+
+        rightSide.getChildren().addAll(
+            statusBlock,
+            new Separator(),
+            new Label("Template Actions:"), actionsRow,
+            new Separator(),
+            buildPageSizeSettingsBlock(),
+            new Separator(),
+            buildTemplatePlaceholderArea()
+        );
+
+        // Disable right side options if no template is selected
+        rightSide.disableProperty().bind(templateChoice.getSelectionModel().selectedItemProperty().isNull());
+
+        HBox splitView = new HBox(leftSide, rightSide);
+        HBox.setHgrow(rightSide, Priority.ALWAYS);
+
         content.getChildren().add(buildSettingsPanel(
-                "1", "HTML Template & Page Size",
-                "Upload your HTML template and set its print size. The application maps the chosen page ratio against your template automatically.",
+                "1", "Templates Configuration",
+                "Upload a new template, or select an existing one to manage its print size, placeholders, and actions.",
                 "settings-panel-blue",
-                buildTemplateControls(),
-                buildPageSizeSettingsBlock(),
-                buildTemplatePlaceholderArea()));
+                splitView));
 
         // ─ Section 2 : Danger Zone ────────────────────────────────────
         content.getChildren().add(buildDangerZonePanel());
@@ -366,41 +420,6 @@ public class MainController {
         wrapper.getStyleClass().add("settings-panel-danger");
         wrapper.setPadding(new Insets(0));
         return wrapper;
-    }
-
-
-
-    private Node buildTemplateControls() {
-        Button uploadButton = new Button("Upload HTML Template");
-        uploadButton.setOnAction(event -> uploadTemplate());
-
-        Button updateButton = new Button("Update Selected Template");
-        updateButton.setOnAction(event -> updateSelectedTemplate());
-
-        Button generateButton = new Button("Download Excel Template");
-        generateButton.setOnAction(event -> downloadExcelTemplate());
-
-        Button templatePreviewButton = new Button("Template Preview");
-        templatePreviewButton.setOnAction(event -> showTemplatePreview());
-
-        removeTemplateButton.setOnAction(event -> deleteSelectedTemplate());
-        removeTemplateButton.getStyleClass().add("negative-button");
-        removeTemplateButton.setText("Remove Selected Template");
-        removeTemplateButton.setDisable(true);
-
-        templateStatus.getStyleClass().add("status-label");
-        selectedTemplateLabel.getStyleClass().add("status-label");
-        templateChoice.setPrefWidth(360);
-        templateChoice.setPromptText("Latest template is selected by default");
-        VBox statusBlock = new VBox(6, new Label("Selected template"), templateChoice, selectedTemplateLabel, templateStatus);
-
-        VBox controls = new VBox(12,
-            new HBox(12, uploadButton, updateButton, generateButton, templatePreviewButton, removeTemplateButton),
-            statusBlock);
-        controls.setAlignment(Pos.CENTER_LEFT);
-        controls.setPadding(new Insets(4, 0, 0, 0));
-        controls.getStyleClass().add("control-row");
-        return controls;
     }
 
     /** Placeholder preview area only — no Danger Zone embedded here. */
@@ -520,14 +539,24 @@ public class MainController {
         // Left cluster: filters + data management
         HBox leftCluster = new HBox(10, statusFilter, searchField, uploadExcelButton,
                 exportExcelButton, editButton, clearDataButton);
-        leftCluster.setAlignment(Pos.CENTER_LEFT);
+        leftCluster.setAlignment(Pos.BOTTOM_LEFT);
 
-        // Right cluster: primary action only
-        HBox rightCluster = new HBox(10, printButton);
-        rightCluster.setAlignment(Pos.CENTER_RIGHT);
+        dataTabTemplateChoice.setPrefWidth(220);
+        dataTabTemplateChoice.setPromptText("Select Template");
+        dataTabTemplateChoice.setStyle("-fx-font-size: 13px; -fx-background-radius: 4;");
+
+        VBox rightCluster = new VBox(6);
+        rightCluster.setAlignment(Pos.BOTTOM_RIGHT);
+        
+        Label templateLbl = new Label("Active Template:");
+        templateLbl.setStyle("-fx-text-fill: #7f8c8d; -fx-font-size: 11px;");
+        HBox templateBox = new HBox(6, templateLbl, dataTabTemplateChoice);
+        templateBox.setAlignment(Pos.CENTER_RIGHT);
+        
+        rightCluster.getChildren().addAll(templateBox, printButton);
 
         HBox controls = new HBox(leftCluster, spacer, rightCluster);
-        controls.setAlignment(Pos.CENTER_LEFT);
+        controls.setAlignment(Pos.BOTTOM_LEFT);
         controls.setPadding(new Insets(4, 0, 0, 0));
         controls.getStyleClass().add("control-row");
         return controls;
@@ -1011,11 +1040,19 @@ public class MainController {
         if (selected == null) {
             return;
         }
-        loadTemplateFromPath(selected.toPath());
+        
+        String name = promptForTemplateName(null, null);
+        if (name == null) {
+            return;
+        }
+        
+        Path normalizedPath = selected.toPath().toAbsolutePath().normalize();
+        preferences.saveTemplateName(normalizedPath.toString(), name);
+        loadTemplateFromPath(normalizedPath);
     }
 
     private void updateSelectedTemplate() {
-        Path currentTemplate = templateChoice.getValue();
+        Path currentTemplate = templateChoice.getSelectionModel().getSelectedItem();
         if (currentTemplate == null) {
             UiDialog.warn(stage, "No template selected", "Choose a template from the dropdown before updating it.");
             return;
@@ -1028,13 +1065,97 @@ public class MainController {
         if (replacement == null) {
             return;
         }
+        
+        String currentName = preferences.getTemplateName(currentTemplate.toAbsolutePath().normalize().toString());
+        String name = promptForTemplateName(currentName, currentTemplate);
+        if (name == null) {
+            return;
+        }
 
-        replaceTemplateInHistory(currentTemplate, replacement.toPath());
-        loadTemplateFromPath(replacement.toPath(), false);
+        Path normalizedReplacement = replacement.toPath().toAbsolutePath().normalize();
+        preferences.saveTemplateName(normalizedReplacement.toString(), name);
+        replaceTemplateInHistory(currentTemplate, normalizedReplacement);
+        loadTemplateFromPath(normalizedReplacement, false);
+    }
+
+    private String promptForTemplateName(String defaultName, Path ignorePath) {
+        String currentDefault = defaultName != null ? defaultName : "";
+        while (true) {
+            TextInputDialog dialog = new TextInputDialog(currentDefault);
+            dialog.initOwner(stage);
+            dialog.setTitle("Template Name");
+            dialog.setHeaderText("Enter a unique name for this template:");
+            dialog.setContentText("Template Name:");
+            
+            if (stage != null && stage.getScene() != null) {
+                dialog.getDialogPane().getStylesheets().setAll(stage.getScene().getStylesheets());
+                boolean isLight = root.getStyleClass().contains("light-theme");
+                dialog.getDialogPane().getStyleClass().removeAll("dark-theme", "light-theme");
+                dialog.getDialogPane().getStyleClass().add(isLight ? "light-theme" : "dark-theme");
+            }
+            
+            javafx.application.Platform.runLater(() -> {
+                dialog.getEditor().requestFocus();
+                dialog.getEditor().selectAll();
+            });
+            
+            Optional<String> result = dialog.showAndWait();
+            if (result.isEmpty()) return null;
+            
+            String name = result.get().trim();
+            if (name.isBlank()) {
+                UiDialog.warn(stage, "Invalid Name", "Template name cannot be empty.");
+                continue;
+            }
+            
+            boolean duplicate = false;
+            for (Path p : templateHistory) {
+                if (ignorePath != null && p.toAbsolutePath().normalize().equals(ignorePath.toAbsolutePath().normalize())) {
+                    continue;
+                }
+                String existingName = preferences.getTemplateName(p.toAbsolutePath().normalize().toString());
+                if (name.equalsIgnoreCase(existingName)) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            
+            if (duplicate) {
+                UiDialog.warn(stage, "Duplicate Name", "A template with this name already exists. Please choose a different name.");
+                currentDefault = name;
+                continue;
+            }
+            
+            return name;
+        }
+    }
+
+    private void renameSelectedTemplate() {
+        Path selectedTemplate = templateChoice.getSelectionModel().getSelectedItem();
+        if (selectedTemplate == null) {
+            UiDialog.warn(stage, "No template selected", "Choose a template from the list before renaming it.");
+            return;
+        }
+        
+        String pathStr = selectedTemplate.toAbsolutePath().normalize().toString();
+        String currentName = preferences.getTemplateName(pathStr);
+        if (currentName == null || currentName.isBlank()) {
+            currentName = selectedTemplate.getFileName() != null ? selectedTemplate.getFileName().toString() : "";
+        }
+        
+        String newName = promptForTemplateName(currentName, selectedTemplate);
+        if (newName != null) {
+            preferences.saveTemplateName(pathStr, newName);
+            int index = templateHistory.indexOf(selectedTemplate);
+            if (index >= 0) {
+                templateHistory.set(index, selectedTemplate);
+            }
+            selectedTemplateLabel.setText(newName);
+        }
     }
 
     private void deleteSelectedTemplate() {
-        Path selectedTemplate = templateChoice.getValue();
+        Path selectedTemplate = templateChoice.getSelectionModel().getSelectedItem();
         if (selectedTemplate == null && htmlTemplateFile != null) {
             selectedTemplate = htmlTemplateFile.toPath();
         }
@@ -1053,7 +1174,7 @@ public class MainController {
 
         if (templateHistory.isEmpty()) {
             clearCurrentTemplateState();
-            templateChoice.setValue(null);
+            templateChoice.getSelectionModel().clearSelection();
             return;
         }
 
@@ -1072,7 +1193,8 @@ public class MainController {
         selectedTemplateLabel.setText("No template selected");
         templateStatus.setText("No HTML template loaded");
         syncingTemplateSelection = true;
-        templateChoice.setValue(null);
+        templateChoice.getSelectionModel().clearSelection();
+        dataTabTemplateChoice.getSelectionModel().clearSelection();
         syncingTemplateSelection = false;
         removeTemplateButton.setDisable(true);
     }
@@ -1110,6 +1232,11 @@ public class MainController {
             dialog.getDialogPane().getStyleClass().removeAll("dark-theme", "light-theme");
             dialog.getDialogPane().getStyleClass().add(isLight ? "light-theme" : "dark-theme");
         }
+
+        javafx.application.Platform.runLater(() -> {
+            dialog.getEditor().requestFocus();
+            dialog.getEditor().selectAll();
+        });
 
         Optional<String> response = dialog.showAndWait();
         return response.map(answer -> captcha.equalsIgnoreCase(answer.trim())).orElse(false);
@@ -1156,7 +1283,7 @@ public class MainController {
         templateHistory.setAll(savedTemplates);
         if (templateHistory.isEmpty()) {
             clearCurrentTemplateState();
-            templateChoice.setValue(null);
+            templateChoice.getSelectionModel().clearSelection();
             preferences.clearSavedTemplatePaths();
             return;
         }
@@ -1202,14 +1329,30 @@ public class MainController {
                 setText(empty || item == null ? null : formatTemplateDisplay(item));
             }
         });
-        templateChoice.setButtonCell(new ListCell<>() {
+
+        templateChoice.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+            if (syncingTemplateSelection || newValue == null) {
+                return;
+            }
+            loadTemplateFromPath(newValue, false);
+        });
+
+        dataTabTemplateChoice.setItems(templateHistory);
+        dataTabTemplateChoice.setCellFactory(listView -> new ListCell<>() {
             @Override
             protected void updateItem(Path item, boolean empty) {
                 super.updateItem(item, empty);
                 setText(empty || item == null ? null : formatTemplateDisplay(item));
             }
         });
-        templateChoice.valueProperty().addListener((observable, oldValue, newValue) -> {
+        dataTabTemplateChoice.setButtonCell(new ListCell<>() {
+            @Override
+            protected void updateItem(Path item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : formatTemplateDisplay(item));
+            }
+        });
+        dataTabTemplateChoice.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
             if (syncingTemplateSelection || newValue == null) {
                 return;
             }
@@ -1219,12 +1362,18 @@ public class MainController {
 
     private void syncTemplateChoice(Path path) {
         syncingTemplateSelection = true;
-        templateChoice.setValue(path);
+        templateChoice.getSelectionModel().select(path);
+        dataTabTemplateChoice.getSelectionModel().select(path);
         syncingTemplateSelection = false;
     }
 
     private String formatTemplateDisplay(Path path) {
         Path normalizedPath = path.toAbsolutePath().normalize();
+        String customName = preferences.getTemplateName(normalizedPath.toString());
+        if (customName != null && !customName.isBlank()) {
+            return customName;
+        }
+
         Path fileName = normalizedPath.getFileName();
         if (fileName == null) {
             return normalizedPath.toString();

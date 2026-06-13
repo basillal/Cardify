@@ -12,6 +12,7 @@ public class AppPreferencesService {
     private static final String KEY_CARD_WIDTH_MM      = "cardWidthMm";
     private static final String KEY_CARD_HEIGHT_MM     = "cardHeightMm";
     private static final String KEY_CARD_PRESET        = "cardPreset";
+    private static final String KEY_TEMPLATE_NAME      = "templateName";
 
     // Standard CR-80 card defaults
     public static final float DEFAULT_CARD_WIDTH_MM  = 53.98f;
@@ -160,6 +161,18 @@ public class AppPreferencesService {
         } else {
             PREFS.put(getPrefKey(KEY_CARD_PRESET, templatePath), presetName);
             saveCardPreset(presetName);
+        }
+    }
+
+    public String getTemplateName(String templatePath) {
+        return PREFS.get(getPrefKey(KEY_TEMPLATE_NAME, templatePath), null);
+    }
+
+    public void saveTemplateName(String templatePath, String name) {
+        if (name == null) {
+            PREFS.remove(getPrefKey(KEY_TEMPLATE_NAME, templatePath));
+        } else {
+            PREFS.put(getPrefKey(KEY_TEMPLATE_NAME, templatePath), name);
         }
     }
 }
