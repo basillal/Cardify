@@ -254,22 +254,16 @@ public class MainController {
         content.setPadding(new Insets(20));
         content.setFillWidth(true);
 
-        // ─ Section 1 : HTML Template ─────────────────────────────────
+        // ─ Section 1 : HTML Template & Page Size ─────────────────────────────────
         content.getChildren().add(buildSettingsPanel(
-                "1", "HTML Template",
-                "Upload your HTML template. Use {{placeholder}} syntax matching your Excel column headers.",
+                "1", "HTML Template & Page Size",
+                "Upload your HTML template and set its print size. The application maps the chosen page ratio against your template automatically.",
                 "settings-panel-blue",
                 buildTemplateControls(),
+                buildPageSizeSettingsBlock(),
                 buildTemplatePlaceholderArea()));
 
-        // ─ Section 2 : Page / Card Size ──────────────────────────────
-        content.getChildren().add(buildSettingsPanel(
-                "2", "Page / Card Size",
-                "Choose a preset or enter custom dimensions (mm). This size is used for both PDF export and print jobs. Remembered between sessions.",
-                "settings-panel-purple",
-                buildPageSizeSettingsBlock()));
-
-        // ─ Section 3 : Danger Zone ────────────────────────────────────
+        // ─ Section 2 : Danger Zone ────────────────────────────────────
         content.getChildren().add(buildDangerZonePanel());
 
         ScrollPane scroll = new ScrollPane(content);
@@ -757,15 +751,16 @@ public class MainController {
 
     /** Loads the persisted preset / card size into the UI and pushes it to PrinterService. */
     private void restoreCardSizeConfig() {
-        String savedPresetName = preferences.getCardPreset();
+        String templatePath = htmlTemplateFile != null ? htmlTemplateFile.getAbsolutePath() : null;
+        String savedPresetName = preferences.getCardPreset(templatePath);
         PageSizePreset preset = PageSizePreset.fromName(savedPresetName);
 
         // If the saved preset is CUSTOM, restore the raw mm values from prefs
         if (preset.isCustom()) {
-            float w = preferences.getCardWidthMm();
-            float h = preferences.getCardHeightMm();
-            cardWidthField.setText(String.format("%.2f", w));
-            cardHeightField.setText(String.format("%.2f", h));
+            float w = preferences.getCardWidthMm(templatePath);
+            float h = preferences.getCardHeightMm(templatePath);
+            cardWidthField.setText(String.format(java.util.Locale.US, "%.2f", w));
+            cardHeightField.setText(String.format(java.util.Locale.US, "%.2f", h));
         }
 
         // Setting the ComboBox value fires onPresetSelected which updates the service
@@ -784,14 +779,15 @@ public class MainController {
         customFields.setManaged(isCustom);
 
         if (!isCustom) {
+            String templatePath = htmlTemplateFile != null ? htmlTemplateFile.getAbsolutePath() : null;
             float w = preset.getWidthMm();
             float h = preset.getHeightMm();
-            cardWidthField.setText(String.format("%.2f", w));
-            cardHeightField.setText(String.format("%.2f", h));
-            preferences.saveCardSizeMm(w, h);
-            preferences.saveCardPreset(preset.name());
+            cardWidthField.setText(String.format(java.util.Locale.US, "%.2f", w));
+            cardHeightField.setText(String.format(java.util.Locale.US, "%.2f", h));
+            preferences.saveCardSizeMm(templatePath, w, h);
+            preferences.saveCardPreset(templatePath, preset.name());
             printerService.setCardSizeMm(w, h);
-            cardSizeStatusLabel.setText(String.format("%s  —  %.2f × %.2f mm", preset.getDisplayName(), w, h));
+            cardSizeStatusLabel.setText(String.format(java.util.Locale.US, "%s  —  %.2f × %.2f mm", preset.getDisplayName(), w, h));
             System.out.println("[Cardify] Page-size preset selected: " + preset.getDisplayName()
                     + " (" + w + " × " + h + " mm)");
         } else {
@@ -808,10 +804,11 @@ public class MainController {
                 UiDialog.warn(stage, "Invalid size", "Width and height must be positive numbers.");
                 return;
             }
-            preferences.saveCardSizeMm(w, h);
-            preferences.saveCardPreset(PageSizePreset.CUSTOM.name());
+            String templatePath = htmlTemplateFile != null ? htmlTemplateFile.getAbsolutePath() : null;
+            preferences.saveCardSizeMm(templatePath, w, h);
+            preferences.saveCardPreset(templatePath, PageSizePreset.CUSTOM.name());
             printerService.setCardSizeMm(w, h);
-            cardSizeStatusLabel.setText(String.format("Custom applied: %.2f × %.2f mm", w, h));
+            cardSizeStatusLabel.setText(String.format(java.util.Locale.US, "Custom applied: %.2f × %.2f mm", w, h));
             System.out.println("[Cardify] Custom card size applied: " + w + " × " + h + " mm");
         } catch (NumberFormatException ex) {
             UiDialog.warn(stage, "Invalid input", "Please enter numeric values for width and height (e.g. 53.98).");
@@ -908,6 +905,7 @@ public class MainController {
             templateStatus.setText("Loaded with " + placeholders.size() + " placeholder(s)");
             syncTemplateChoice(normalizedPath);
             removeTemplateButton.setDisable(false);
+            restoreCardSizeConfig();
         } else {
             clearCurrentTemplateState();
         }

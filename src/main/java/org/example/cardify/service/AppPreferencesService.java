@@ -123,4 +123,43 @@ public class AppPreferencesService {
             PREFS.put(KEY_CARD_PRESET, presetName);
         }
     }
+
+    private String getPrefKey(String baseKey, String templatePath) {
+        if (templatePath == null || templatePath.isBlank()) {
+            return baseKey;
+        }
+        return baseKey + "_" + Math.abs(templatePath.hashCode());
+    }
+
+    public float getCardWidthMm(String templatePath) {
+        return PREFS.getFloat(getPrefKey(KEY_CARD_WIDTH_MM, templatePath), getCardWidthMm());
+    }
+
+    public float getCardHeightMm(String templatePath) {
+        return PREFS.getFloat(getPrefKey(KEY_CARD_HEIGHT_MM, templatePath), getCardHeightMm());
+    }
+
+    public void saveCardSizeMm(String templatePath, float widthMm, float heightMm) {
+        PREFS.putFloat(getPrefKey(KEY_CARD_WIDTH_MM, templatePath), widthMm);
+        PREFS.putFloat(getPrefKey(KEY_CARD_HEIGHT_MM, templatePath), heightMm);
+        saveCardSizeMm(widthMm, heightMm);
+    }
+
+    public void clearCardSizeMm(String templatePath) {
+        PREFS.remove(getPrefKey(KEY_CARD_WIDTH_MM, templatePath));
+        PREFS.remove(getPrefKey(KEY_CARD_HEIGHT_MM, templatePath));
+    }
+
+    public String getCardPreset(String templatePath) {
+        return PREFS.get(getPrefKey(KEY_CARD_PRESET, templatePath), getCardPreset());
+    }
+
+    public void saveCardPreset(String templatePath, String presetName) {
+        if (presetName == null) {
+            PREFS.remove(getPrefKey(KEY_CARD_PRESET, templatePath));
+        } else {
+            PREFS.put(getPrefKey(KEY_CARD_PRESET, templatePath), presetName);
+            saveCardPreset(presetName);
+        }
+    }
 }
