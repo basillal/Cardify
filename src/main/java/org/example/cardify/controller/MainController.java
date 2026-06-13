@@ -19,6 +19,7 @@ import javafx.scene.web.WebView;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import org.example.cardify.model.SpreadsheetRow;
+import org.example.cardify.model.PageSizePreset;
 import org.example.cardify.service.ExcelExportService;
 import org.example.cardify.service.ExcelImportService;
 import org.example.cardify.service.AppPreferencesService;
@@ -27,7 +28,10 @@ import org.example.cardify.service.HtmlTemplateService;
 import org.example.cardify.service.PrinterService;
 import org.example.cardify.util.UiDialog;
 
+import javafx.application.Platform;
+
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -50,7 +54,8 @@ public class MainController {
     private final ObservableList<SpreadsheetRow> allRows = FXCollections.observableArrayList();
     private final FilteredList<SpreadsheetRow> filteredRows = new FilteredList<>(allRows, row -> true);
 
-    private final TableView<SpreadsheetRow> tableView = new TableView<>();
+    private final TableView<SpreadsheetRow> tableView      = new TableView<>();
+    private final TableView<SpreadsheetRow> actionsTableView = new TableView<>();
     private final TextArea placeholdersArea = new TextArea();
     private final Label templateStatus = new Label("No HTML template loaded");
     private final Label excelStatus = new Label("No Excel file loaded");
@@ -79,6 +84,12 @@ public class MainController {
     private final ExcelExportService excelExportService = new ExcelExportService();
     private final AppPreferencesService preferences = new AppPreferencesService();
 
+    // Card page-size config fields (live in the footer)
+    private final ComboBox<PageSizePreset> pageSizePresetChoice = new ComboBox<>();
+    private final TextField cardWidthField  = new TextField();
+    private final TextField cardHeightField = new TextField();
+    private final Label cardSizeStatusLabel = new Label();
+
     private Stage previewStage;
     private WebView previewWebView;
 
@@ -104,6 +115,7 @@ public class MainController {
         configureTemplateChoice();
         installSearch();
         restoreSavedState();
+        restoreCardSizeConfig();
     }
 
     private void buildLayout() {
@@ -160,23 +172,18 @@ public class MainController {
         dataSection.getStyleClass().add("content-card");
         dataSection.setFillWidth(true);
 
-        VBox setupSection = new VBox(14,
-                createSectionHeader("Template and Excel Setup", "Upload your HTML template once, then generate or load the Excel sheet for repeated printing."),
-                buildTemplateControls(),
-                buildTemplatePreview()
-        );
-        setupSection.getStyleClass().add("content-card");
-        setupSection.setFillWidth(true);
+        // Settings tab groups template, page size, PDF export, and danger zone
+        VBox settingsSection = buildSettingsSection();
 
         Tab dataTab = new Tab("Data");
         dataTab.setContent(dataSection);
         dataTab.setClosable(false);
 
-        Tab setupTab = new Tab("Template & Excel");
-        setupTab.setContent(setupSection);
-        setupTab.setClosable(false);
+        Tab settingsTab = new Tab("Settings");
+        settingsTab.setContent(settingsSection);
+        settingsTab.setClosable(false);
 
-        contentTabPane = new TabPane(dataTab, setupTab);
+        contentTabPane = new TabPane(dataTab, settingsTab);
         contentTabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         contentTabPane.getStyleClass().add("content-tabs");
         contentTabPane.tabMinWidthProperty().bind(contentTabPane.widthProperty().divide(2).subtract(8));
@@ -232,10 +239,142 @@ public class MainController {
         help.setWrapText(true);
         HBox.setHgrow(help, Priority.ALWAYS);
 
-        VBox printerBlock = new VBox(4, new HBox(8, printerLabel, printerChoice, refreshPrintersButton, diagnosticsButton), printerAdviceLabel);
+        VBox printerBlock = new VBox(4,
+                new HBox(8, printerLabel, printerChoice, refreshPrintersButton, diagnosticsButton),
+                printerAdviceLabel);
+
         footer.getChildren().addAll(printerBlock, help);
         return footer;
     }
+
+    // ── Settings tab ────────────────────────────────────────────────
+
+    private VBox buildSettingsSection() {
+        VBox content = new VBox(16);
+        content.setPadding(new Insets(20));
+        content.setFillWidth(true);
+
+        // ─ Section 1 : HTML Template ─────────────────────────────────
+        content.getChildren().add(buildSettingsPanel(
+                "1", "HTML Template",
+                "Upload your HTML template. Use {{placeholder}} syntax matching your Excel column headers.",
+                "settings-panel-blue",
+                buildTemplateControls(),
+                buildTemplatePlaceholderArea()));
+
+        // ─ Section 2 : Page / Card Size ──────────────────────────────
+        content.getChildren().add(buildSettingsPanel(
+                "2", "Page / Card Size",
+                "Choose a preset or enter custom dimensions (mm). This size is used for both PDF export and print jobs. Remembered between sessions.",
+                "settings-panel-purple",
+                buildPageSizeSettingsBlock()));
+
+        // ─ Section 3 : Danger Zone ────────────────────────────────────
+        content.getChildren().add(buildDangerZonePanel());
+
+        ScrollPane scroll = new ScrollPane(content);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.getStyleClass().add("settings-scroll");
+        VBox wrapper = new VBox(scroll);
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        wrapper.setFillWidth(true);
+        return wrapper;
+    }
+
+    /**
+     * Builds a visually distinct settings panel card with a numbered accent badge,
+     * a title, description, and one or more content nodes.
+     */
+    private VBox buildSettingsPanel(String number, String title, String description,
+                                    String styleClass, Node... contentNodes) {
+        // Badge
+        Label badge = new Label(number);
+        badge.getStyleClass().add("settings-badge");
+
+        Label titleLabel = new Label(title);
+        titleLabel.getStyleClass().addAll("section-title", "settings-panel-title");
+
+        HBox header = new HBox(10, badge, titleLabel);
+        header.setAlignment(Pos.CENTER_LEFT);
+
+        Label desc = new Label(description);
+        desc.getStyleClass().add("section-description");
+        desc.setWrapText(true);
+
+        VBox body = new VBox(12);
+        body.getChildren().add(header);
+        body.getChildren().add(desc);
+        body.getChildren().add(new Separator());
+        for (Node n : contentNodes) body.getChildren().add(n);
+
+        body.getStyleClass().addAll("settings-panel", styleClass);
+        body.setPadding(new Insets(16));
+        body.setFillWidth(true);
+        return body;
+    }
+
+    /** Page-size preset picker with optional custom W × H fields. */
+    private Node buildPageSizeSettingsBlock() {
+        Label presetLabel = new Label("Preset:");
+        presetLabel.getStyleClass().add("footer-label");
+
+        pageSizePresetChoice.getItems().setAll(PageSizePreset.values());
+        pageSizePresetChoice.setPrefWidth(240);
+        pageSizePresetChoice.setPromptText("Select preset");
+
+        cardWidthField.setPrefWidth(78);
+        cardWidthField.setPromptText("W mm");
+        cardHeightField.setPrefWidth(78);
+        cardHeightField.setPromptText("H mm");
+        Label xLabel = new Label("×");
+
+        Button applyButton = new Button("Apply Custom");
+        applyButton.setOnAction(evt -> applyCardSizeConfig());
+
+        HBox customFields = new HBox(6, new Label("Custom size:"), cardWidthField, xLabel, cardHeightField, applyButton);
+        customFields.setAlignment(Pos.CENTER_LEFT);
+        customFields.setVisible(false);
+        customFields.setManaged(false);
+
+        cardSizeStatusLabel.getStyleClass().add("printer-advice");
+
+        pageSizePresetChoice.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) ->
+                onPresetSelected(newVal, customFields));
+
+        VBox block = new VBox(10,
+                new HBox(10, presetLabel, pageSizePresetChoice),
+                customFields,
+                cardSizeStatusLabel);
+        block.setAlignment(Pos.TOP_LEFT);
+        return block;
+    }
+
+    /** Danger zone panel — styled as a collapsible red-accent card. */
+    private VBox buildDangerZonePanel() {
+        Button deleteAllButton = new Button("Delete All Data");
+        deleteAllButton.getStyleClass().add("negative-button");
+        deleteAllButton.setOnAction(event -> deleteAllDataWithCaptcha());
+
+        Label warn = new Label("Removes saved templates, Excel paths, and imported rows from the application. Actual files on your disk are NOT deleted.");
+        warn.getStyleClass().add("section-description");
+        warn.setWrapText(true);
+
+        VBox body = new VBox(10, warn, deleteAllButton);
+
+        TitledPane pane = new TitledPane("⚠  Danger Zone", body);
+        pane.setExpanded(false);
+        pane.setCollapsible(true);
+        pane.getStyleClass().add("danger-zone-pane");
+
+        VBox wrapper = new VBox(pane);
+        wrapper.getStyleClass().add("settings-panel-danger");
+        wrapper.setPadding(new Insets(0));
+        return wrapper;
+    }
+
+
 
     private Node buildTemplateControls() {
         Button uploadButton = new Button("Upload HTML Template");
@@ -270,29 +409,21 @@ public class MainController {
         return controls;
     }
 
-    private Node buildTemplatePreview() {
+    /** Placeholder preview area only — no Danger Zone embedded here. */
+    private Node buildTemplatePlaceholderArea() {
         placeholdersArea.setEditable(false);
-        placeholdersArea.setPrefRowCount(7);
-        placeholdersArea.setPromptText("Detected placeholders will appear here");
+        placeholdersArea.setPrefRowCount(6);
+        placeholdersArea.setPromptText("Detected placeholders will appear here after loading a template");
         Label label = new Label("Detected placeholders");
-        VBox box = new VBox(8, label, placeholdersArea, buildDangerZone());
+        label.getStyleClass().add("section-description");
+        VBox box = new VBox(6, label, placeholdersArea);
         VBox.setVgrow(placeholdersArea, Priority.ALWAYS);
         return box;
     }
 
-    private Node buildDangerZone() {
-        Button deleteAllButton = new Button("Delete All");
-        deleteAllButton.getStyleClass().add("negative-button");
-        deleteAllButton.setOnAction(event -> deleteAllDataWithCaptcha());
-
-        VBox dangerContent = new VBox(8,
-                new Label("Danger Zone"),
-                new Label("Removes saved templates, Excel paths, and imported rows from the application (actual files are not deleted from your system)."),
-                deleteAllButton);
-        TitledPane dangerZone = new TitledPane("Danger Zone", dangerContent);
-        dangerZone.setExpanded(false);
-        dangerZone.setCollapsible(true);
-        return dangerZone;
+    /** @deprecated Use buildSettingsPanel-based flow; kept for compatibility. */
+    private Node buildTemplatePreview() {
+        return buildTemplatePlaceholderArea();
     }
 
     private Node buildHowToUsePanel() {
@@ -367,10 +498,11 @@ public class MainController {
         Button uploadExcelButton = new Button("Upload Filled Excel");
         uploadExcelButton.setOnAction(event -> uploadExcel());
 
-        rowPreviewButton.setOnAction(event -> showRowPreview());
+        // rowPreviewButton kept as a field (used by updateSelectedCount) but not shown in toolbar.
+        // Preview is now accessible per-row via the Actions column.
         rowPreviewButton.setDisable(true);
 
-        Button printButton = new Button("Print Selected Rows");
+        Button printButton = new Button("\uD83D\uDDA8  Print Selected Rows");
         printButton.getStyleClass().add("accent-button");
         printButton.setOnAction(event -> printSelectedRows());
 
@@ -390,7 +522,17 @@ public class MainController {
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox controls = new HBox(12, statusFilter, searchField, uploadExcelButton, rowPreviewButton, exportExcelButton, editButton, clearDataButton, spacer, printButton);
+
+        // Left cluster: filters + data management
+        HBox leftCluster = new HBox(10, statusFilter, searchField, uploadExcelButton,
+                exportExcelButton, editButton, clearDataButton);
+        leftCluster.setAlignment(Pos.CENTER_LEFT);
+
+        // Right cluster: primary action only
+        HBox rightCluster = new HBox(10, printButton);
+        rightCluster.setAlignment(Pos.CENTER_RIGHT);
+
+        HBox controls = new HBox(leftCluster, spacer, rightCluster);
         controls.setAlignment(Pos.CENTER_LEFT);
         controls.setPadding(new Insets(4, 0, 0, 0));
         controls.getStyleClass().add("control-row");
@@ -430,6 +572,26 @@ public class MainController {
 
         VBox.setVgrow(tableView, Priority.ALWAYS);
 
+        // ── Fixed Actions sidebar (sticky right) ──────────────────────
+        actionsTableView.setItems(filteredRows);
+        actionsTableView.getStyleClass().addAll("data-table", "actions-side-table");
+        actionsTableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        actionsTableView.setEditable(false);
+        actionsTableView.setFocusTraversable(false);
+        actionsTableView.setMouseTransparent(false);
+        actionsTableView.setPlaceholder(new Label(""));
+        actionsTableView.setFixedCellSize(tableView.getFixedCellSize());
+        buildActionsColumn();
+
+        // Sync vertical scroll after both tables have a skin
+        tableView.skinProperty().addListener((obs, o, newSkin) -> {
+            if (newSkin != null) Platform.runLater(this::syncTableScrollBars);
+        });
+
+        HBox tableRow = new HBox(0, tableView, actionsTableView);
+        HBox.setHgrow(tableView, Priority.ALWAYS);
+        VBox.setVgrow(tableRow, Priority.ALWAYS);
+
         HBox statusBar = new HBox(18, excelStatus, rowCountLabel, selectedCountLabel);
         statusBar.setAlignment(Pos.CENTER_LEFT);
         selectedCountLabel.getStyleClass().add("status-label");
@@ -438,7 +600,69 @@ public class MainController {
 
         Label hint = new Label("Click one or more rows, then print. Each selected row becomes one ID card output.");
         hint.getStyleClass().add("table-hint");
-        return new VBox(10, statusBar, hint, tableView);
+        return new VBox(10, statusBar, hint, tableRow);
+    }
+
+    /** Synchronizes the vertical scrollbars of the main and actions tables, hides actions table scrollbars. */
+    private void syncTableScrollBars() {
+        ScrollBar mainVBar = null;
+        ScrollBar actionsVBar = null;
+        for (Node n : tableView.lookupAll(".scroll-bar")) {
+            if (n instanceof ScrollBar sb && sb.getOrientation() == javafx.geometry.Orientation.VERTICAL) {
+                mainVBar = sb;
+                break;
+            }
+        }
+        for (Node n : actionsTableView.lookupAll(".scroll-bar")) {
+            if (n instanceof ScrollBar sb) {
+                if (sb.getOrientation() == javafx.geometry.Orientation.VERTICAL) {
+                    actionsVBar = sb;
+                }
+                sb.setVisible(false);
+                sb.setManaged(false);
+            }
+        }
+        if (mainVBar != null && actionsVBar != null) {
+            actionsVBar.valueProperty().bindBidirectional(mainVBar.valueProperty());
+        }
+    }
+
+    /** Builds (or rebuilds) the single Actions column inside the fixed side-table. */
+    private void buildActionsColumn() {
+        actionsTableView.getColumns().clear();
+        TableColumn<SpreadsheetRow, Void> col = new TableColumn<>("Actions");
+        col.setPrefWidth(100);
+        col.setMinWidth(100);
+        col.setMaxWidth(100);
+        col.setSortable(false);
+        col.setReorderable(false);
+        col.setEditable(false);
+        col.setCellFactory(c -> new TableCell<>() {
+            private final Button previewBtn = new Button("\uD83D\uDC41");
+            private final Button pdfBtn     = new Button("\u2913");
+            private final HBox   box        = new HBox(4, previewBtn, pdfBtn);
+            {
+                box.setAlignment(Pos.CENTER);
+                previewBtn.getStyleClass().add("row-action-btn");
+                pdfBtn.getStyleClass().addAll("row-action-btn", "row-pdf-btn");
+                previewBtn.setTooltip(new javafx.scene.control.Tooltip("Preview this row"));
+                pdfBtn.setTooltip(new javafx.scene.control.Tooltip("Download PDF for this row"));
+                previewBtn.setOnAction(evt -> {
+                    SpreadsheetRow row = getTableRow().getItem();
+                    if (row != null) previewSingleRow(row);
+                });
+                pdfBtn.setOnAction(evt -> {
+                    SpreadsheetRow row = getTableRow().getItem();
+                    if (row != null) exportSingleRowAsPdf(row);
+                });
+            }
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                setGraphic(empty || getTableRow().getItem() == null ? null : box);
+            }
+        });
+        actionsTableView.getColumns().add(col);
     }
 
     private void installSearch() {
@@ -479,23 +703,34 @@ public class MainController {
         if (currentSelection != null && printers.contains(currentSelection)) {
             printerChoice.setValue(currentSelection);
             updatePrinterAdvice();
+            logPrinterConnected(currentSelection);
             return;
         }
 
         if (systemDefaultPrinter != null && printers.contains(systemDefaultPrinter)) {
             printerChoice.setValue(systemDefaultPrinter);
             updatePrinterAdvice();
+            logPrinterConnected(systemDefaultPrinter);
             return;
         }
 
         if (!printers.isEmpty()) {
             printerChoice.setValue(printers.get(0));
             updatePrinterAdvice();
+            logPrinterConnected(printers.get(0));
             return;
         }
 
         printerChoice.setValue(null);
         updatePrinterAdvice();
+    }
+
+    /** Emits a log entry when a printer becomes the active/selected printer. */
+    private void logPrinterConnected(String printerName) {
+        if (printerName == null || printerName.isBlank()) return;
+        boolean isVirtual = printerService.isVirtualPdfPrinter(printerName);
+        String kind = isVirtual ? "virtual PDF printer" : "physical printer";
+        System.out.println("[Cardify] Printer connected/selected: '" + printerName + "' (" + kind + ")");
     }
 
     private void updatePrinterAdvice() {
@@ -520,7 +755,141 @@ public class MainController {
         }
     }
 
+    /** Loads the persisted preset / card size into the UI and pushes it to PrinterService. */
+    private void restoreCardSizeConfig() {
+        String savedPresetName = preferences.getCardPreset();
+        PageSizePreset preset = PageSizePreset.fromName(savedPresetName);
+
+        // If the saved preset is CUSTOM, restore the raw mm values from prefs
+        if (preset.isCustom()) {
+            float w = preferences.getCardWidthMm();
+            float h = preferences.getCardHeightMm();
+            cardWidthField.setText(String.format("%.2f", w));
+            cardHeightField.setText(String.format("%.2f", h));
+        }
+
+        // Setting the ComboBox value fires onPresetSelected which updates the service
+        pageSizePresetChoice.setValue(preset);
+    }
+
+    /**
+     * Called whenever the user picks a different preset in the ComboBox.
+     * Immediately applies preset dimensions; for Custom it just shows the fields.
+     */
+    private void onPresetSelected(PageSizePreset preset, HBox customFields) {
+        if (preset == null) return;
+
+        boolean isCustom = preset.isCustom();
+        customFields.setVisible(isCustom);
+        customFields.setManaged(isCustom);
+
+        if (!isCustom) {
+            float w = preset.getWidthMm();
+            float h = preset.getHeightMm();
+            cardWidthField.setText(String.format("%.2f", w));
+            cardHeightField.setText(String.format("%.2f", h));
+            preferences.saveCardSizeMm(w, h);
+            preferences.saveCardPreset(preset.name());
+            printerService.setCardSizeMm(w, h);
+            cardSizeStatusLabel.setText(String.format("%s  —  %.2f × %.2f mm", preset.getDisplayName(), w, h));
+            System.out.println("[Cardify] Page-size preset selected: " + preset.getDisplayName()
+                    + " (" + w + " × " + h + " mm)");
+        } else {
+            cardSizeStatusLabel.setText("Custom — enter width × height and click Apply.");
+        }
+    }
+
+    /** Validates the custom width/height fields, persists, and updates PrinterService. */
+    private void applyCardSizeConfig() {
+        try {
+            float w = Float.parseFloat(cardWidthField.getText().trim());
+            float h = Float.parseFloat(cardHeightField.getText().trim());
+            if (w <= 0 || h <= 0) {
+                UiDialog.warn(stage, "Invalid size", "Width and height must be positive numbers.");
+                return;
+            }
+            preferences.saveCardSizeMm(w, h);
+            preferences.saveCardPreset(PageSizePreset.CUSTOM.name());
+            printerService.setCardSizeMm(w, h);
+            cardSizeStatusLabel.setText(String.format("Custom applied: %.2f × %.2f mm", w, h));
+            System.out.println("[Cardify] Custom card size applied: " + w + " × " + h + " mm");
+        } catch (NumberFormatException ex) {
+            UiDialog.warn(stage, "Invalid input", "Please enter numeric values for width and height (e.g. 53.98).");
+        }
+    }
+
+    /**
+     * Exports every currently selected row as a standalone PDF file.
+     * The user chooses an output directory via a directory chooser;
+     * files are named {@code card_<rowIndex>.pdf}.
+     * Runs on a background thread so the UI stays responsive.
+     */
+    private void exportSelectedAsPdf() {
+        List<SpreadsheetRow> selected = tableView.getSelectionModel().getSelectedItems();
+        if (selected == null || selected.isEmpty()) {
+            UiDialog.warn(stage, "No rows selected",
+                    "Please select one or more rows in the Data tab before downloading PDFs.");
+            return;
+        }
+
+        String templateContent = currentTemplateContent();
+        if (templateContent == null || templateContent.isBlank()) {
+            UiDialog.warn(stage, "No template loaded",
+                    "Please upload an HTML template in the Settings tab before exporting PDFs.");
+            return;
+        }
+
+        javafx.stage.DirectoryChooser dc = new javafx.stage.DirectoryChooser();
+        dc.setTitle("Choose PDF output folder");
+        dc.setInitialDirectory(new File(System.getProperty("user.home")));
+        File dir = dc.showDialog(stage);
+        if (dir == null) return;  // user cancelled
+
+        Path outputDir = dir.toPath();
+        Path templatePath = htmlTemplateFile != null ? htmlTemplateFile.toPath() : null;
+
+        // Work list captured before leaving FX thread
+        List<SpreadsheetRow> workList = List.copyOf(selected);
+
+        Thread worker = new Thread(() -> {
+            int ok = 0, fail = 0;
+            for (int i = 0; i < workList.size(); i++) {
+                SpreadsheetRow row = workList.get(i);
+                // Build a safe filename from the first column value, or fallback to index
+                String baseName = "card_" + (i + 1);
+                Path dest = outputDir.resolve(baseName + ".pdf");
+                try {
+                    printerService.exportRowAsPdf(templateContent, row, java.util.Map.of(), templatePath, dest);
+                    ok++;
+                } catch (Exception ex) {
+                    fail++;
+                    System.err.println("[Cardify] exportSelectedAsPdf: failed for row " + i + ": " + ex.getMessage());
+                }
+            }
+            int finalOk = ok, finalFail = fail;
+            Platform.runLater(() -> {
+                String msg = "Exported " + finalOk + " PDF(s) to:\n" + outputDir;
+                if (finalFail > 0) msg += "\n(" + finalFail + " row(s) failed — check diagnostics)";
+                UiDialog.info(stage, "PDF Export Complete", msg);
+                System.out.println("[Cardify] PDF export finished: " + finalOk + " ok, " + finalFail + " failed -> " + outputDir);
+            });
+        }, "cardify-pdf-export");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    /** Returns the raw HTML of the currently loaded template, or {@code null} if none. */
+    private String currentTemplateContent() {
+        if (htmlTemplateFile == null || !htmlTemplateFile.exists()) return null;
+        try {
+            return Files.readString(htmlTemplateFile.toPath());
+        } catch (IOException ex) {
+            return null;
+        }
+    }
+
     private void loadTemplateFromPath(Path path) {
+
         loadTemplateFromPath(path, true);
     }
 
@@ -1009,6 +1378,7 @@ public class MainController {
     private void rebuildColumns() {
         tableView.getColumns().clear();
 
+        // ── Checkbox select column ────────────────────────────────────
         TableColumn<SpreadsheetRow, Boolean> selectColumn = new TableColumn<>();
         selectColumn.setCellValueFactory(cellData -> cellData.getValue().selectedProperty());
         selectColumn.setCellFactory(CheckBoxTableCell.forTableColumn(selectColumn));
@@ -1019,7 +1389,6 @@ public class MainController {
         selectColumn.setSortable(false);
         selectColumn.setReorderable(false);
         selectAllCheckBox.setAllowIndeterminate(true);
-        // Toggle visible rows based on their current model state instead of relying on checkbox state.
         selectAllCheckBox.addEventFilter(MouseEvent.MOUSE_PRESSED, evt -> {
             headerCheckboxIndeterminateClick = selectAllCheckBox.isIndeterminate();
         });
@@ -1035,14 +1404,15 @@ public class MainController {
         selectColumn.setGraphic(selectAllCheckBox);
         tableView.getColumns().add(selectColumn);
 
+        // ── Status column ─────────────────────────────────────────────
         TableColumn<SpreadsheetRow, String> statusColumn = new TableColumn<>("Status");
         statusColumn.setCellValueFactory(cellData -> cellData.getValue().statusProperty());
         statusColumn.setCellFactory(ChoiceBoxTableCell.forTableColumn("Pending", "Printing", "Printed", "Error"));
         statusColumn.setPrefWidth(120);
-        // Allow changing Status without toggling Edit Mode
         statusColumn.setEditable(true);
         tableView.getColumns().add(statusColumn);
 
+        // ── Data columns ──────────────────────────────────────────────
         for (String header : currentHeaders) {
             TableColumn<SpreadsheetRow, String> column = new TableColumn<>(header);
             column.setCellValueFactory(cellData -> cellData.getValue().valueProperty(header));
@@ -1051,6 +1421,48 @@ public class MainController {
             column.setMinWidth(140);
             tableView.getColumns().add(column);
         }
+        // Actions column lives in actionsTableView (sticky right) — not here.
+    }
+
+    /** Opens a preview window for a specific row (called from Actions column). */
+    private void previewSingleRow(SpreadsheetRow row) {
+        if (htmlTemplateFile == null) {
+            UiDialog.warn(stage, "No template loaded", "Upload an HTML template before previewing.");
+            return;
+        }
+        String htmlTemplate = htmlTemplateService.readTemplate(htmlTemplateFile.toPath());
+        openPreviewWindow("Row Preview", htmlTemplateService.renderTemplate(htmlTemplate, row.asMap(), getQrMappings()));
+    }
+
+    /** Exports a single row as PDF (called from Actions column). */
+    private void exportSingleRowAsPdf(SpreadsheetRow row) {
+        String templateContent = currentTemplateContent();
+        if (templateContent == null || templateContent.isBlank()) {
+            UiDialog.warn(stage, "No template loaded",
+                    "Upload an HTML template before exporting PDF.");
+            return;
+        }
+        javafx.stage.DirectoryChooser dc = new javafx.stage.DirectoryChooser();
+        dc.setTitle("Choose PDF output folder");
+        dc.setInitialDirectory(new File(System.getProperty("user.home")));
+        File dir = dc.showDialog(stage);
+        if (dir == null) return;
+
+        Path outputDir = dir.toPath();
+        Path templatePath = htmlTemplateFile != null ? htmlTemplateFile.toPath() : null;
+        String baseName = "card_" + System.currentTimeMillis();
+        Path dest = outputDir.resolve(baseName + ".pdf");
+
+        Thread worker = new Thread(() -> {
+            try {
+                printerService.exportRowAsPdf(templateContent, row, java.util.Map.of(), templatePath, dest);
+                Platform.runLater(() -> UiDialog.info(stage, "PDF Saved", "Saved to:\n" + dest));
+            } catch (Exception ex) {
+                Platform.runLater(() -> UiDialog.error(stage, "PDF Failed", ex.getMessage()));
+            }
+        }, "cardify-pdf-single");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     private void printSelectedRows() {

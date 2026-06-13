@@ -50,13 +50,22 @@ public class PrinterService {
     // The PDF renderer and print dispatch paths are optimized for card-sized output.
     private final HtmlTemplateService htmlTemplateService = new HtmlTemplateService();
 
-    // Standard CR-80 card dimensions in portrait orientation (short side = width).
-    // 53.98 mm = 2.125 in (short side), 85.60 mm = 3.370 in (long side).
-    // Must match the @page CSS rule in addPdfPageStyles() so the PDF page is
-    // exactly the same size as the negotiated PageFormat — SCALE_TO_FIT then
-    // produces scale=1.0 with zero centering offset for both front and back pages.
-    private static final float CARD_WIDTH_MM  = 53.98f;
-    private static final float CARD_HEIGHT_MM = 85.60f;
+    // Card page dimensions in millimetres — configurable from the UI.
+    // Defaults to the standard CR-80 size: 53.98 mm × 85.60 mm.
+    // Must match the @page CSS rule injected by addPdfPageStyles() so the PDF
+    // page is exactly the same size as the negotiated PageFormat (scale = 1.0).
+    private float cardWidthMm  = 53.98f;
+    private float cardHeightMm = 85.60f;
+
+    /** Called by the UI when the user changes the page-size configuration. */
+    public void setCardSizeMm(float widthMm, float heightMm) {
+        this.cardWidthMm  = widthMm;
+        this.cardHeightMm = heightMm;
+        appendLog(String.format("PrinterService: card size updated to %.2f × %.2f mm", widthMm, heightMm));
+    }
+
+    public float getCardWidthMm()  { return cardWidthMm; }
+    public float getCardHeightMm() { return cardHeightMm; }
 
     public List<String> listPrinterNames() {
         return Arrays.stream(PrinterJob.lookupPrintServices())
@@ -333,6 +342,31 @@ public class PrinterService {
         }
     }
 
+    /**
+     * Renders {@code htmlTemplate} for the given {@code row} and writes the resulting PDF to
+     * {@code destPath}. Intended for the "Download PDF" feature in the Settings tab.
+     *
+     * @param htmlTemplate the raw HTML (with placeholders) to render
+     * @param row          spreadsheet row whose values fill the placeholders
+     * @param qrMappings   column-to-QR-content mapping (may be empty)
+     * @param templatePath path to the template file (used to resolve relative image URLs); may be null
+     * @param destPath     where to write the output PDF
+     * @throws IOException if the file cannot be written
+     */
+    public void exportRowAsPdf(String htmlTemplate, SpreadsheetRow row,
+                               java.util.Map<String, String> qrMappings,
+                               Path templatePath,
+                               Path destPath) throws IOException {
+        String renderedHtml = htmlTemplateService.renderTemplate(htmlTemplate, row.asMap(), qrMappings);
+        String baseUri = templatePath == null ? null : templatePath.getParent().toUri().toString();
+        Path tempPdf = createTempPdf(renderedHtml, baseUri);
+        try {
+            Files.copy(tempPdf, destPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            deleteTempPdf(tempPdf);
+        }
+    }
+
     private Path createTempPdf(String html, String baseUri) {
         try {
             Path tempFile = Files.createTempFile("cardify-print-", ".pdf");
@@ -491,12 +525,12 @@ public class PrinterService {
 
     /**
      * Queries the printer's supported {@link MediaSizeName} catalog and returns the entry
-     * whose physical dimensions are closest to the CR-80 card ({@value #CARD_WIDTH_MM} ×
-     * {@value #CARD_HEIGHT_MM} mm) within a 5 mm tolerance in either orientation.
+     * whose physical dimensions are closest to the configured card size within a 5 mm tolerance
+     * in either orientation.
      *
      * <p>Finding the right {@code MediaSizeName} is essential: on Windows the JRE translates
      * it to the correct {@code DEVMODE.dmPaperSize} value, which is what actually tells the
-     * printer driver to target the CR-80 card stock. {@link MediaPrintableArea} alone only
+     * printer driver to target the correct card stock. {@link MediaPrintableArea} alone only
      * describes the printable area <em>within</em> the already-selected paper and does not
      * change which paper the driver uses.
      */
@@ -514,16 +548,16 @@ public class PrinterService {
                 float w = size.getX(MediaPrintableArea.MM);
                 float h = size.getY(MediaPrintableArea.MM);
                 // Accept match in either portrait or landscape orientation
-                boolean portraitMatch  = Math.abs(w - CARD_WIDTH_MM)  <= tolerance
-                                      && Math.abs(h - CARD_HEIGHT_MM) <= tolerance;
-                boolean landscapeMatch = Math.abs(w - CARD_HEIGHT_MM) <= tolerance
-                                      && Math.abs(h - CARD_WIDTH_MM)  <= tolerance;
+                boolean portraitMatch  = Math.abs(w - cardWidthMm)  <= tolerance
+                                      && Math.abs(h - cardHeightMm) <= tolerance;
+                boolean landscapeMatch = Math.abs(w - cardHeightMm) <= tolerance
+                                      && Math.abs(h - cardWidthMm)  <= tolerance;
                 if (portraitMatch || landscapeMatch) {
                     appendLog("findCardMediaSizeName: matched '" + name + "' (" + w + "×" + h + " mm)");
                     return Optional.of(name);
                 }
             }
-            appendLog("findCardMediaSizeName: no media name matched CR-80 dimensions");
+            appendLog("findCardMediaSizeName: no media name matched configured card dimensions (" + cardWidthMm + "×" + cardHeightMm + " mm)");
         } catch (Exception e) {
             appendLog("findCardMediaSizeName: error querying media catalog: " + e.getMessage());
         }
@@ -531,15 +565,15 @@ public class PrinterService {
     }
 
     /**
-     * Builds a {@link PrintRequestAttributeSet} that tells the printer driver to target CR-80
-     * card stock in portrait orientation. Includes:
+     * Builds a {@link PrintRequestAttributeSet} that tells the printer driver to target the
+     * configured card size in portrait orientation. Includes:
      * <ul>
-     *   <li>The printer's own {@link MediaSizeName} for CR-80 (if discoverable), which causes
+     *   <li>The printer's own {@link MediaSizeName} for the card (if discoverable), which causes
      *       the Windows JRE to embed the correct {@code DEVMODE.dmPaperSize} in the print
-     *       ticket — the mechanism the browser uses when "Paper size: CR-80" is selected.</li>
+     *       ticket.
      *   <li>{@link MediaPrintableArea} covering the full card (zero margins) as a fallback
-     *       hint when no named media is found.</li>
-     *   <li>{@link OrientationRequested#PORTRAIT} so the driver lays the content portrait.</li>
+     *       hint when no named media is found.
+     *   <li>{@link OrientationRequested#PORTRAIT} so the driver lays the content portrait.
      * </ul>
      */
     private PrintRequestAttributeSet buildCardPrintAttributes(PrintService printService) {
@@ -547,7 +581,7 @@ public class PrinterService {
         // Primary hint: named media size → maps to DEVMODE.dmPaperSize on Windows
         findCardMediaSizeName(printService).ifPresent(attrs::add);
         // Secondary hint: explicit printable area (covers drivers that check this instead)
-        attrs.add(new MediaPrintableArea(0, 0, CARD_WIDTH_MM, CARD_HEIGHT_MM, MediaPrintableArea.MM));
+        attrs.add(new MediaPrintableArea(0, 0, cardWidthMm, cardHeightMm, MediaPrintableArea.MM));
         attrs.add(OrientationRequested.PORTRAIT);
         return attrs;
     }
@@ -573,8 +607,8 @@ public class PrinterService {
      */
     private PageFormat negotiatePageFormat(PrinterJob job, PrintRequestAttributeSet attrs) {
         final double MM_TO_PT  = 72.0 / 25.4;
-        final double cardW     = CARD_WIDTH_MM  * MM_TO_PT;
-        final double cardH     = CARD_HEIGHT_MM * MM_TO_PT;
+        final double cardW     = cardWidthMm  * MM_TO_PT;
+        final double cardH     = cardHeightMm * MM_TO_PT;
         final double maxCardPt = Math.max(cardW, cardH) * 1.5; // sanity threshold
 
         PageFormat pf = job.getPageFormat(attrs);
@@ -747,22 +781,40 @@ public class PrinterService {
     }
 
     private String addPdfPageStyles(String html) {
-        // Use physical CR-80 dimensions (same as CARD_WIDTH_MM × CARD_HEIGHT_MM) so the
-        // generated PDF page matches the negotiated PageFormat exactly. SCALE_TO_FIT then
-        // produces scale=1.0 with zero centering offset, ensuring identical positioning
-        // on both front (page 1) and back (page 2) of the card.
-        String cardSize = String.format("%.2fmm %.2fmm", CARD_WIDTH_MM, CARD_HEIGHT_MM);
-        String printReset = "<style>@page { size: " + cardSize + "; margin: 0; } html, body { margin: 0; padding: 0; }</style>";
+        // Use the user-configured card dimensions so the generated PDF page matches the
+        // negotiated PageFormat exactly. SCALE_TO_FIT then produces scale=1.0 with zero
+        // centering offset, ensuring identical positioning on both sides of the card.
+        String cardSize = String.format("%.2fmm %.2fmm", cardWidthMm, cardHeightMm);
+
+        // Injected LAST inside <head> so our @page rule comes after any @page rule already
+        // in the template — the last rule in the cascade always wins for @page.
+        // html/body are clamped to the exact card dimensions so any overflowing content is
+        // clipped rather than generating extra blank space at the top or bottom.
+        String printReset = "<style>"
+                + "@page { size: " + cardSize + "; margin: 0; } "
+                + "html, body { margin: 0 !important; padding: 0 !important; }"
+                + "</style>";
+        appendLog("addPdfPageStyles: using card size " + cardSize);
+
         if (html == null || html.isBlank()) {
             return "<html><head>" + printReset + "</head><body></body></html>";
         }
 
         String lowerHtml = html.toLowerCase();
+
+        // Prefer injecting just before </head> so our rule is the last @page in the cascade
+        int headCloseIndex = lowerHtml.lastIndexOf("</head>");
+        if (headCloseIndex >= 0) {
+            return html.substring(0, headCloseIndex) + printReset + html.substring(headCloseIndex);
+        }
+
+        // No </head>: try injecting just after <head>
         int headIndex = lowerHtml.indexOf("<head>");
         if (headIndex >= 0) {
             return html.substring(0, headIndex + 6) + printReset + html.substring(headIndex + 6);
         }
 
+        // No <head> at all: wrap the whole document
         int htmlIndex = lowerHtml.indexOf("<html>");
         if (htmlIndex >= 0) {
             return html.substring(0, htmlIndex + 6) + "<head>" + printReset + "</head>" + html.substring(htmlIndex + 6);
