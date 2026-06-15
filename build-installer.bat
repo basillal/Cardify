@@ -7,6 +7,40 @@ if "%JAVA_HOME%"=="" (
 
 set "JPACKAGE=%JAVA_HOME%\bin\jpackage"
 
+rem Auto-increment version number in version.properties and read it
+powershell -Command ^
+  "$propsFile = 'src\main\resources\version.properties';" ^
+  "if (Test-Path $propsFile) {" ^
+  "  $props = ConvertFrom-StringData (Get-Content $propsFile -Raw);" ^
+  "  $version = $props.version;" ^
+  "} else {" ^
+  "  $version = '1.0.0';" ^
+  "}" ^
+  "if ($version -match '^(\d+)\.(\d+)\.(\d+)$') {" ^
+  "  $major = [int]$Matches[1];" ^
+  "  $minor = [int]$Matches[2];" ^
+  "  $patch = [int]$Matches[3] + 1;" ^
+  "  $newVersion = \"$major.$minor.$patch\";" ^
+  "} else {" ^
+  "  $newVersion = '1.0.1';" ^
+  "}" ^
+  "'version=' + $newVersion | Set-Content $propsFile;" ^
+  "Write-Output $newVersion" > temp_version.txt
+
+set /p APP_VERSION=<temp_version.txt
+del temp_version.txt
+
+echo Incrementing app version to: %APP_VERSION%
+
+echo Rebuilding jar with Maven...
+call mvn package
+if %ERRORLEVEL% neq 0 (
+  echo Maven build failed.
+  exit /b 1
+)
+
+echo Generating installer package...
+
 rem -----------------------------------------------------------------------
 rem Required modules explanation:
 rem  javafx.controls, javafx.fxml, javafx.web  - JavaFX UI
@@ -28,7 +62,7 @@ rem -----------------------------------------------------------------------
   --main-jar Cardify-1.0-SNAPSHOT.jar ^
   --main-class org.example.cardify.MainApp ^
   --name Cardify ^
-  --app-version 1.0.0 ^
+  --app-version %APP_VERSION% ^
   --vendor "KJSDC" ^
   --icon src\main\resources\app-icon.ico ^
   --dest dist ^

@@ -121,11 +121,25 @@ public class MainController {
         root.getStyleClass().add(light ? "light-theme" : "dark-theme");
     }
 
+    private String readAppVersion() {
+        java.util.Properties props = new java.util.Properties();
+        try (java.io.InputStream in = getClass().getResourceAsStream("/version.properties")) {
+            if (in != null) {
+                props.load(in);
+                return props.getProperty("version", "1.0.0");
+            }
+        } catch (Exception ignored) {
+        }
+        return "1.0.0";
+    }
+
     private Node buildHeader() {
-        Label title = new Label("Cardify Desktop Studio");
+        String appVersion = readAppVersion();
+        Label title = new Label("Cardify Desktop Studio v" + appVersion);
         title.getStyleClass().add("app-title");
 
-        Label subtitle = new Label("Streamline your ID card workflow — from data import to print-ready output.");        subtitle.getStyleClass().add("app-subtitle");
+        Label subtitle = new Label("Streamline your ID card workflow — from data import to print-ready output.");
+        subtitle.getStyleClass().add("app-subtitle");
         subtitle.setWrapText(true);
 
         Hyperlink howToUseLink = new Hyperlink("How to Use");
