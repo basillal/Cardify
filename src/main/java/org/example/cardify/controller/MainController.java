@@ -165,9 +165,21 @@ public class MainController {
     }
 
     private Node buildContent() {
+        dataTabTemplateChoice.setPrefWidth(160);
+        dataTabTemplateChoice.setPromptText("Template");
+        dataTabTemplateChoice.setStyle("-fx-font-size: 12px; -fx-background-radius: 4;");
+
+        Label templateLbl = new Label("Template:");
+        templateLbl.setStyle("-fx-text-fill: #7f8c8d; -fx-font-size: 12px;");
+        
+        HBox templateBox = new HBox(8, templateLbl, dataTabTemplateChoice);
+        templateBox.setAlignment(Pos.CENTER_RIGHT);
+
+        VBox dataSectionHeader = createSectionHeader("Data Table and Print", "Most users will print from the loaded Excel rows. Select rows and print from here.");
+        
         VBox dataSection = new VBox(14,
-                createSectionHeader("Data Table and Print", "Most users will print from the loaded Excel rows. Select rows and print from here."),
-                buildDataControls(),
+                dataSectionHeader,
+                buildDataControls(templateBox),
                 buildTablePanel()
         );
         dataSection.getStyleClass().add("content-card");
@@ -231,8 +243,7 @@ public class MainController {
         diagnosticsButton.setOnAction(evt -> showDiagnosticsDialog());
 
         printerAdviceLabel.getStyleClass().add("printer-advice");
-        printerAdviceLabel.setWrapText(true);
-        printerAdviceLabel.setMaxWidth(300);
+        printerAdviceLabel.setWrapText(false);
         printerAdviceLabel.setText("Select a real printer for actual print jobs; Microsoft Print to PDF saves files instead.");
 
         Label help = new Label("Image fields should point to local image files; they will be converted to printable HTML data URLs during rendering.");
@@ -507,7 +518,7 @@ public class MainController {
         return stepCard;
     }
 
-    private Node buildDataControls() {
+    private Node buildDataControls(Node templateBox) {
         Button uploadExcelButton = new Button("Upload Filled Excel");
         uploadExcelButton.setOnAction(event -> uploadExcel());
 
@@ -541,19 +552,8 @@ public class MainController {
                 exportExcelButton, editButton, clearDataButton);
         leftCluster.setAlignment(Pos.BOTTOM_LEFT);
 
-        dataTabTemplateChoice.setPrefWidth(220);
-        dataTabTemplateChoice.setPromptText("Select Template");
-        dataTabTemplateChoice.setStyle("-fx-font-size: 13px; -fx-background-radius: 4;");
-
-        VBox rightCluster = new VBox(6);
+        VBox rightCluster = new VBox(8, templateBox, printButton);
         rightCluster.setAlignment(Pos.BOTTOM_RIGHT);
-        
-        Label templateLbl = new Label("Active Template:");
-        templateLbl.setStyle("-fx-text-fill: #7f8c8d; -fx-font-size: 11px;");
-        HBox templateBox = new HBox(6, templateLbl, dataTabTemplateChoice);
-        templateBox.setAlignment(Pos.CENTER_RIGHT);
-        
-        rightCluster.getChildren().addAll(templateBox, printButton);
 
         HBox controls = new HBox(leftCluster, spacer, rightCluster);
         controls.setAlignment(Pos.BOTTOM_LEFT);
@@ -764,9 +764,9 @@ public class MainController {
         }
 
         if (printerService.isVirtualPdfPrinter(selectedPrinter)) {
-            printerAdviceLabel.setText("Selected printer is a PDF printer. Cardify will save output to Documents\\Cardify PDF Output instead of sending a print job.");
+            printerAdviceLabel.setText("PDF Printer selected. Output will be saved to Documents\\Cardify PDF Output.");
         } else {
-            printerAdviceLabel.setText("Selected printer should submit a real print job. Make sure the printer is powered on and connected.");
+            printerAdviceLabel.setText("Real printer selected. Ensure it is powered on and connected.");
         }
     }
 
