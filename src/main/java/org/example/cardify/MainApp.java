@@ -51,6 +51,11 @@ public class MainApp extends Application {
     }
 
     public static void main(String[] args) {
+        try {
+            System.setProperty("java.awt.headless", "false");
+            java.awt.Toolkit.getDefaultToolkit();
+        } catch (Throwable ignore) {
+        }
         launch(args);
     }
 }

@@ -6,9 +6,17 @@ import java.util.prefs.Preferences;
 
 public class AppPreferencesService {
     private static final Preferences PREFS = Preferences.userNodeForPackage(AppPreferencesService.class);
-    private static final String KEY_TEMPLATE_PATH = "lastTemplatePath";
-    private static final String KEY_TEMPLATE_HISTORY = "templateHistory";
-    private static final String KEY_EXCEL_PATH = "lastExcelPath";
+    private static final String KEY_TEMPLATE_PATH    = "lastTemplatePath";
+    private static final String KEY_TEMPLATE_HISTORY  = "templateHistory";
+    private static final String KEY_EXCEL_PATH         = "lastExcelPath";
+    private static final String KEY_CARD_WIDTH_MM      = "cardWidthMm";
+    private static final String KEY_CARD_HEIGHT_MM     = "cardHeightMm";
+    private static final String KEY_CARD_PRESET        = "cardPreset";
+    private static final String KEY_TEMPLATE_NAME      = "templateName";
+
+    // Standard CR-80 card defaults
+    public static final float DEFAULT_CARD_WIDTH_MM  = 53.98f;
+    public static final float DEFAULT_CARD_HEIGHT_MM = 85.60f;
 
     public String getSavedTemplatePath() {
         return PREFS.get(KEY_TEMPLATE_PATH, null);
@@ -83,5 +91,88 @@ public class AppPreferencesService {
 
     public void clearSavedExcelPath() {
         PREFS.remove(KEY_EXCEL_PATH);
+    }
+
+    // ── Card page-size preferences ─────────────────────────────────────────
+
+    public float getCardWidthMm() {
+        return PREFS.getFloat(KEY_CARD_WIDTH_MM, DEFAULT_CARD_WIDTH_MM);
+    }
+
+    public float getCardHeightMm() {
+        return PREFS.getFloat(KEY_CARD_HEIGHT_MM, DEFAULT_CARD_HEIGHT_MM);
+    }
+
+    public void saveCardSizeMm(float widthMm, float heightMm) {
+        PREFS.putFloat(KEY_CARD_WIDTH_MM, widthMm);
+        PREFS.putFloat(KEY_CARD_HEIGHT_MM, heightMm);
+    }
+
+    public void clearCardSizeMm() {
+        PREFS.remove(KEY_CARD_WIDTH_MM);
+        PREFS.remove(KEY_CARD_HEIGHT_MM);
+    }
+
+    public String getCardPreset() {
+        return PREFS.get(KEY_CARD_PRESET, null);
+    }
+
+    public void saveCardPreset(String presetName) {
+        if (presetName == null) {
+            PREFS.remove(KEY_CARD_PRESET);
+        } else {
+            PREFS.put(KEY_CARD_PRESET, presetName);
+        }
+    }
+
+    private String getPrefKey(String baseKey, String templatePath) {
+        if (templatePath == null || templatePath.isBlank()) {
+            return baseKey;
+        }
+        return baseKey + "_" + Math.abs(templatePath.hashCode());
+    }
+
+    public float getCardWidthMm(String templatePath) {
+        return PREFS.getFloat(getPrefKey(KEY_CARD_WIDTH_MM, templatePath), getCardWidthMm());
+    }
+
+    public float getCardHeightMm(String templatePath) {
+        return PREFS.getFloat(getPrefKey(KEY_CARD_HEIGHT_MM, templatePath), getCardHeightMm());
+    }
+
+    public void saveCardSizeMm(String templatePath, float widthMm, float heightMm) {
+        PREFS.putFloat(getPrefKey(KEY_CARD_WIDTH_MM, templatePath), widthMm);
+        PREFS.putFloat(getPrefKey(KEY_CARD_HEIGHT_MM, templatePath), heightMm);
+        saveCardSizeMm(widthMm, heightMm);
+    }
+
+    public void clearCardSizeMm(String templatePath) {
+        PREFS.remove(getPrefKey(KEY_CARD_WIDTH_MM, templatePath));
+        PREFS.remove(getPrefKey(KEY_CARD_HEIGHT_MM, templatePath));
+    }
+
+    public String getCardPreset(String templatePath) {
+        return PREFS.get(getPrefKey(KEY_CARD_PRESET, templatePath), getCardPreset());
+    }
+
+    public void saveCardPreset(String templatePath, String presetName) {
+        if (presetName == null) {
+            PREFS.remove(getPrefKey(KEY_CARD_PRESET, templatePath));
+        } else {
+            PREFS.put(getPrefKey(KEY_CARD_PRESET, templatePath), presetName);
+            saveCardPreset(presetName);
+        }
+    }
+
+    public String getTemplateName(String templatePath) {
+        return PREFS.get(getPrefKey(KEY_TEMPLATE_NAME, templatePath), null);
+    }
+
+    public void saveTemplateName(String templatePath, String name) {
+        if (name == null) {
+            PREFS.remove(getPrefKey(KEY_TEMPLATE_NAME, templatePath));
+        } else {
+            PREFS.put(getPrefKey(KEY_TEMPLATE_NAME, templatePath), name);
+        }
     }
 }
