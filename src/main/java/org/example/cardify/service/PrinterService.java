@@ -8,6 +8,7 @@ import org.apache.pdfbox.rendering.PDFRenderer;
 import org.example.cardify.model.SpreadsheetRow;
 
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
+import com.openhtmltopdf.outputdevice.helper.BaseRendererBuilder.PageSizeUnits;
 
 import java.awt.print.Book;
 import java.awt.print.PageFormat;
@@ -357,9 +358,18 @@ public class PrinterService {
                                java.util.Map<String, String> qrMappings,
                                Path templatePath,
                                Path destPath) throws IOException {
+        exportRowAsPdf(htmlTemplate, row, qrMappings, templatePath, destPath, cardWidthMm, cardHeightMm);
+    }
+
+    public void exportRowAsPdf(String htmlTemplate, SpreadsheetRow row,
+                               java.util.Map<String, String> qrMappings,
+                               Path templatePath,
+                               Path destPath,
+                               float widthMm,
+                               float heightMm) throws IOException {
         String renderedHtml = htmlTemplateService.renderTemplate(htmlTemplate, row.asMap(), qrMappings);
         String baseUri = templatePath == null ? null : templatePath.getParent().toUri().toString();
-        Path tempPdf = createTempPdf(renderedHtml, baseUri);
+        Path tempPdf = createTempPdf(renderedHtml, baseUri, widthMm, heightMm);
         try {
             Files.copy(tempPdf, destPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         } finally {
@@ -368,11 +378,16 @@ public class PrinterService {
     }
 
     private Path createTempPdf(String html, String baseUri) {
+        return createTempPdf(html, baseUri, cardWidthMm, cardHeightMm);
+    }
+
+    private Path createTempPdf(String html, String baseUri, float widthMm, float heightMm) {
         try {
             Path tempFile = Files.createTempFile("cardify-print-", ".pdf");
-            String rendered = addPdfPageStyles(html == null ? "" : html);
+            String rendered = html == null ? "" : html;
 
             PdfRendererBuilder builder = new PdfRendererBuilder();
+            builder.useDefaultPageSize(widthMm, heightMm, PageSizeUnits.MM);
             builder.withHtmlContent(rendered, baseUri);
             try (var outputStream = Files.newOutputStream(tempFile)) {
                 builder.toStream(outputStream);
@@ -780,46 +795,4 @@ public class PrinterService {
         }
     }
 
-    private String addPdfPageStyles(String html) {
-        // Use the user-configured card dimensions so the generated PDF page matches the
-        // negotiated PageFormat exactly. SCALE_TO_FIT then produces scale=1.0 with zero
-        // centering offset, ensuring identical positioning on both sides of the card.
-        String cardSize = String.format("%.2fmm %.2fmm", cardWidthMm, cardHeightMm);
-
-        // Injected LAST inside <head> so our @page rule comes after any @page rule already
-        // in the template — the last rule in the cascade always wins for @page.
-        // html/body are clamped to the exact card dimensions so any overflowing content is
-        // clipped rather than generating extra blank space at the top or bottom.
-        String printReset = "<style>"
-                + "@page { size: " + cardSize + "; margin: 0; } "
-                + "html, body { margin: 0 !important; padding: 0 !important; }"
-                + "</style>";
-        appendLog("addPdfPageStyles: using card size " + cardSize);
-
-        if (html == null || html.isBlank()) {
-            return "<html><head>" + printReset + "</head><body></body></html>";
-        }
-
-        String lowerHtml = html.toLowerCase();
-
-        // Prefer injecting just before </head> so our rule is the last @page in the cascade
-        int headCloseIndex = lowerHtml.lastIndexOf("</head>");
-        if (headCloseIndex >= 0) {
-            return html.substring(0, headCloseIndex) + printReset + html.substring(headCloseIndex);
-        }
-
-        // No </head>: try injecting just after <head>
-        int headIndex = lowerHtml.indexOf("<head>");
-        if (headIndex >= 0) {
-            return html.substring(0, headIndex + 6) + printReset + html.substring(headIndex + 6);
-        }
-
-        // No <head> at all: wrap the whole document
-        int htmlIndex = lowerHtml.indexOf("<html>");
-        if (htmlIndex >= 0) {
-            return html.substring(0, htmlIndex + 6) + "<head>" + printReset + "</head>" + html.substring(htmlIndex + 6);
-        }
-
-        return "<html><head>" + printReset + "</head><body>" + html + "</body></html>";
-    }
 }

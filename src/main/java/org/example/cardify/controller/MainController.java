@@ -71,6 +71,7 @@ public class MainController {
     private final Button clearDataButton = new Button("Clear Imported Data");
     private final Button rowPreviewButton = new Button("Row Preview");
     private final Button exportExcelButton = new Button("Download Excel");
+    private final Button reloadExcelButton = new Button("Reload Excel");
     private final Button editButton = new Button("Edit Rows");
     private final ListView<Path> templateChoice = new ListView<>();
     private final ComboBox<Path> dataTabTemplateChoice = new ComboBox<>();
@@ -522,6 +523,9 @@ public class MainController {
         Button uploadExcelButton = new Button("Upload Filled Excel");
         uploadExcelButton.setOnAction(event -> uploadExcel());
 
+        reloadExcelButton.setOnAction(event -> reloadExcelFromSavedPath());
+        reloadExcelButton.setDisable(preferences.getSavedExcelPath() == null || preferences.getSavedExcelPath().isBlank());
+
         // rowPreviewButton kept as a field (used by updateSelectedCount) but not shown in toolbar.
         // Preview is now accessible per-row via the Actions column.
         rowPreviewButton.setDisable(true);
@@ -549,7 +553,7 @@ public class MainController {
 
         // Left cluster: filters + data management
         HBox leftCluster = new HBox(10, statusFilter, searchField, uploadExcelButton,
-                exportExcelButton, editButton, clearDataButton);
+            reloadExcelButton, exportExcelButton, editButton, clearDataButton);
         leftCluster.setAlignment(Pos.BOTTOM_LEFT);
 
         VBox rightCluster = new VBox(8, templateBox, printButton);
@@ -873,6 +877,8 @@ public class MainController {
 
         Path outputDir = dir.toPath();
         Path templatePath = htmlTemplateFile != null ? htmlTemplateFile.toPath() : null;
+        float cardWidthMm = printerService.getCardWidthMm();
+        float cardHeightMm = printerService.getCardHeightMm();
 
         // Work list captured before leaving FX thread
         List<SpreadsheetRow> workList = List.copyOf(selected);
@@ -885,7 +891,7 @@ public class MainController {
                 String baseName = "card_" + (i + 1);
                 Path dest = outputDir.resolve(baseName + ".pdf");
                 try {
-                    printerService.exportRowAsPdf(templateContent, row, java.util.Map.of(), templatePath, dest);
+                    printerService.exportRowAsPdf(templateContent, row, java.util.Map.of(), templatePath, dest, cardWidthMm, cardHeightMm);
                     ok++;
                 } catch (Exception ex) {
                     fail++;
@@ -943,21 +949,49 @@ public class MainController {
     private void loadExcelFromPath(Path path) {
         if (Files.exists(path) && Files.isRegularFile(path)) {
             List<SpreadsheetRow> rows = excelImportService.readRows(path);
+            excelFile = path.toFile();
+            preferences.saveExcelPath(path.toAbsolutePath().toString());
+            reloadExcelButton.setDisable(false);
+
+            allRows.clear();
+            currentHeaders = List.of();
+            tableView.getColumns().clear();
+            tableView.setItems(filteredRows);
+
             if (!rows.isEmpty()) {
-                excelFile = path.toFile();
-                rows.forEach(row -> bindRowSelection(row));
+                rows.forEach(this::bindRowSelection);
                 allRows.setAll(rows);
                 currentHeaders = new ArrayList<>(rows.get(0).headers());
                 rebuildColumns();
-                tableView.setItems(filteredRows);
-                updateFilters();
-                excelStatus.setText(path.getFileName() + " loaded with " + rows.size() + " row(s)");
-                preferences.saveExcelPath(path.toAbsolutePath().toString());
                 clearDataButton.setDisable(false);
+                excelStatus.setText(path.getFileName() + " loaded with " + rows.size() + " row(s)");
+            } else {
+                clearDataButton.setDisable(true);
+                excelStatus.setText(path.getFileName() + " loaded with 0 row(s)");
             }
+
+            updateFilters();
         } else {
             preferences.clearSavedExcelPath();
+            reloadExcelButton.setDisable(true);
         }
+    }
+
+    private void reloadExcelFromSavedPath() {
+        String savedPath = preferences.getSavedExcelPath();
+        if (savedPath == null || savedPath.isBlank()) {
+            UiDialog.warn(stage, "No Excel path saved", "Upload a filled Excel file once, then use Reload Excel for later updates.");
+            return;
+        }
+
+        Path path = Path.of(savedPath);
+        if (!Files.exists(path)) {
+            UiDialog.warn(stage, "Excel file not found", "The saved Excel file no longer exists:\n" + savedPath);
+            reloadExcelButton.setDisable(true);
+            return;
+        }
+
+        loadExcelFromPath(path);
     }
 
     private void bindRowSelection(SpreadsheetRow row) {
@@ -1599,10 +1633,12 @@ public class MainController {
         Path templatePath = htmlTemplateFile != null ? htmlTemplateFile.toPath() : null;
         String baseName = "card_" + System.currentTimeMillis();
         Path dest = outputDir.resolve(baseName + ".pdf");
+        float cardWidthMm = printerService.getCardWidthMm();
+        float cardHeightMm = printerService.getCardHeightMm();
 
         Thread worker = new Thread(() -> {
             try {
-                printerService.exportRowAsPdf(templateContent, row, java.util.Map.of(), templatePath, dest);
+                printerService.exportRowAsPdf(templateContent, row, java.util.Map.of(), templatePath, dest, cardWidthMm, cardHeightMm);
                 Platform.runLater(() -> UiDialog.info(stage, "PDF Saved", "Saved to:\n" + dest));
             } catch (Exception ex) {
                 Platform.runLater(() -> UiDialog.error(stage, "PDF Failed", ex.getMessage()));
