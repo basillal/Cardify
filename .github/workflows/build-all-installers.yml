@@ -1,0 +1,58 @@
+name: Build Windows and Linux installers
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Build app
+        run: mvn -B clean package dependency:copy-dependencies -DincludeScope=runtime
+
+      - name: Build Windows exe
+        shell: cmd
+        run: .\build-installer.bat
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cardify-windows-exe
+          path: dist/**
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build app
+        run: mvn -B clean package dependency:copy-dependencies -DincludeScope=runtime
+
+      - name: Make packaging script executable
+        run: chmod +x build-installer.sh
+
+      - name: Build Linux deb
+        run: ./build-installer.sh
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cardify-linux-deb
+          path: dist/**

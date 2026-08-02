@@ -54,52 +54,29 @@ mvn javafx:run
 
 ## Package installers
 
-Build the app and copy runtime dependencies first:
-
-```bash
-mvn clean package dependency:copy-dependencies -DincludeScope=runtime
-```
-
-Ubuntu `.deb`:
-
-```bash
-export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-$JAVA_HOME/bin/jpackage \
-	--type deb \
-	--input target \
-	--main-jar Cardify-1.0-SNAPSHOT.jar \
-	--main-class org.example.cardify.MainApp \
-	--name Cardify \
-	--app-version 1.0.0 \
-	--vendor "Your Name or Org" \
-	--icon src/main/resources/app-icon.png \
-	--dest installer \
-	--linux-shortcut \
-	--module-path target/dependency \
-	--add-modules javafx.controls,javafx.fxml,javafx.web,java.desktop \
-	--verbose
-```
+### Build both installers with the helper scripts
 
 Windows `.exe`:
 
 ```bat
-set JAVA_HOME=C:\Program Files\Java\jdk-17
-%JAVA_HOME%\bin\jpackage ^
-	--type exe ^
-	--input target ^
-	--main-jar Cardify-1.0-SNAPSHOT.jar ^
-	--main-class org.example.cardify.MainApp ^
-	--name Cardify ^
-	--app-version 1.0.0 ^
-	--vendor "Your Name or Org" ^
-	--icon src\main\resources\app-icon.ico ^
-	--dest installer ^
-	--win-shortcut ^
-	--win-menu ^
-	--module-path target\dependency ^
-	--add-modules javafx.controls,javafx.fxml,javafx.web,java.desktop ^
-	--verbose
+mvn clean package dependency:copy-dependencies -DincludeScope=runtime
+build-installer.bat
 ```
+
+Linux `.deb`:
+
+```bash
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+chmod +x build-installer.sh
+./build-installer.sh
+```
+
+### Build from GitHub Actions
+
+The workflow at `.github/workflows/build-all-installers.yml` builds both installers automatically on GitHub Actions and uploads them as artifacts:
+
+- `cardify-windows-exe`
+- `cardify-linux-deb`
 
 ## Template format
 
