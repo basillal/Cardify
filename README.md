@@ -2,7 +2,7 @@
 
 Cardify is a JavaFX desktop application for turning an HTML ID-card template into a printable, data-driven workflow.
 
-## How to use it
+## How to use 
 
 1. Open the app and go to the **Template & Excel** tab first.
 2. Upload your HTML template.
